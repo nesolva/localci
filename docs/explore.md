@@ -132,7 +132,7 @@ suites:
     repos: [you/acme-shop]
     database:
       driver: command
-      template: {seed: "echo '{\"tenants\":{}}' > {{db.url}}"}
+      template: {seed: "echo '{\"tenants\":{}}' > '{{db.url}}'"}
       create: "cp {{template}} {{name}}"
       drop: "rm -f {{name}}"
     stack:
