@@ -1,0 +1,60 @@
+{{define "runhead"}}
+  <div class="run-head">
+    <div>
+      <div class="crumb"><a href="/">Overview</a> / {{short .R.ID}}</div>
+      <h1 class="title">{{.R.Suite}}</h1>
+      <p class="muted">{{who .R.Trigger .R.RequestedBy}}{{if .R.Reason}} · {{.R.Reason}}{{end}}</p>
+    </div>
+    <div class="run-state">
+      <span class="pill s-{{.R.State}}">{{.R.State}}</span>
+      {{if .Duration}}<time class="num dur"{{if .Active}} data-since="{{.Started}}"{{end}}>{{.Duration}}</time>{{end}}
+    </div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <a role="tab" aria-selected="{{eq .Tab "timeline"}}" href="/runs/{{.R.ID}}{{.Attempt.Q}}">Timeline</a>
+    <a role="tab" aria-selected="{{eq .Tab "dag"}}" href="/runs/{{.R.ID}}/dag{{.Attempt.Q}}">DAG</a>
+    <span class="grow"></span>
+    {{template "attempts" .Attempt}}
+    {{if .Shards}}<a class="tab-link" href="/runs/{{.R.ID}}/log?shard={{(index .Shards 0).N}}">Log</a>{{end}}
+  </div>
+{{end}}
+
+{{define "attempts"}}{{if .Show}}<nav class="attempts" aria-label="Attempt shown">
+  <span class="muted small">Attempt</span>
+  {{range .Items}}<a href="{{.Href}}"{{if .Current}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+</nav>{{end}}{{end}}
+
+{{define "timeline"}}
+  {{if .Lanes}}
+  <div class="timeline" role="img" aria-label="Timeline of every shard's tests and steps">
+    <div class="axis"><span class="label"></span><div class="track">{{range .Ticks}}<span style="left:{{pct .Left}}">{{.Label}}</span>{{end}}</div></div>
+    {{range .Lanes}}
+    <div class="lane{{if .Serial}} is-serial{{end}}">
+      <span class="label">{{.Label}}</span>
+      <div class="track">
+        {{range $.Ticks}}<i class="grid" style="left:{{pct .Left}}"></i>{{end}}
+        {{range .Tests}}<a class="test {{.Class}}" style="left:{{pct .Left}};width:{{pct .Width}}" data-tip="{{.Tip}}" href="/runs/{{$.R.ID}}/tests/{{.ID}}" aria-label="{{.Tip}}">{{range .Steps}}<i class="step {{.Class}}" style="left:{{pct .Left}};width:{{pct .Width}}" data-tip="{{.Tip}}"{{if .Flows}} data-flows="{{.Flows}}"{{end}}></i>{{end}}</a>{{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <div class="timeline empty"><p class="muted">{{if .Active}}Steps appear here as the first test starts.{{else}}No steps were recorded for this run.{{end}}</p></div>
+  {{end}}
+{{end}}
+
+{{define "failures"}}
+  {{if .Failures}}
+  <h2 class="sub">{{len .Failures}} failed</h2>
+  <ul class="rows">
+  {{range .Failures}}
+    <li class="row is-failed"><i class="dot s-failed" aria-hidden="true"></i>
+      <a class="grow" href="/runs/{{$.R.ID}}/tests/{{.ID}}"><b>{{.Title}}</b><span class="msg">{{if .Step}}{{.Step}} — {{end}}{{.Message}}</span></a>
+      {{if .Class}}<span class="tag">{{.Class}}</span>{{end}}</li>
+  {{end}}
+  </ul>
+  {{else if .Tests}}
+  <p class="muted summary">{{.Passed}} of {{.Tests}} tests passed.</p>
+  {{end}}
+{{end}}

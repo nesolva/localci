@@ -1,0 +1,212 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "localci report protocol v1: one event (one line of the NDJSON file)",
+  "type": "object",
+  "required": ["v", "t", "ts"],
+  "properties": {
+    "v": { "const": 1 },
+    "t": { "type": "string", "minLength": 1 },
+    "ts": { "type": "integer", "minimum": 0, "description": "Unix milliseconds" }
+  },
+  "allOf": [
+    { "if": { "properties": { "t": { "const": "begin" } } }, "then": { "$ref": "#/definitions/begin" } },
+    { "if": { "properties": { "t": { "const": "test.begin" } } }, "then": { "$ref": "#/definitions/testBegin" } },
+    { "if": { "properties": { "t": { "const": "step.begin" } } }, "then": { "$ref": "#/definitions/stepBegin" } },
+    { "if": { "properties": { "t": { "const": "step.end" } } }, "then": { "$ref": "#/definitions/stepEnd" } },
+    { "if": { "properties": { "t": { "const": "test.end" } } }, "then": { "$ref": "#/definitions/testEnd" } },
+    { "if": { "properties": { "t": { "const": "artifact" } } }, "then": { "$ref": "#/definitions/artifact" } },
+    { "if": { "properties": { "t": { "const": "flow.begin" } } }, "then": { "$ref": "#/definitions/flowBegin" } },
+    { "if": { "properties": { "t": { "const": "flow.end" } } }, "then": { "$ref": "#/definitions/flowEnd" } },
+    { "if": { "properties": { "t": { "const": "coverage" } } }, "then": { "$ref": "#/definitions/coverage" } },
+    { "if": { "properties": { "t": { "const": "writes" } } }, "then": { "$ref": "#/definitions/writes" } },
+    { "if": { "properties": { "t": { "const": "end" } } }, "then": { "$ref": "#/definitions/end" } }
+  ],
+  "definitions": {
+    "id": { "type": "string", "minLength": 1 },
+    "begin": {
+      "required": ["shard", "total"],
+      "properties": {
+        "shard": { "type": "integer", "minimum": 1, "description": "1-based shard index ($LOCALCI_SHARD, default 1)" },
+        "total": { "type": "integer", "minimum": 0, "description": "tests this process will run" }
+      }
+    },
+    "testBegin": {
+      "required": ["test", "file", "title", "line"],
+      "properties": {
+        "test": { "$ref": "#/definitions/id" },
+        "file": { "type": "string", "description": "relative to the Playwright root dir, forward slashes" },
+        "title": { "type": "string", "description": "describe blocks and test title joined by ' › '" },
+        "line": { "type": "integer", "minimum": 0 },
+        "retry": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "stepBegin": {
+      "required": ["test", "step", "parent", "title", "kind"],
+      "properties": {
+        "test": { "$ref": "#/definitions/id" },
+        "step": { "$ref": "#/definitions/id" },
+        "parent": { "type": ["string", "null"], "description": "enclosing step id, null at the top of the test" },
+        "title": { "type": "string" },
+        "kind": { "enum": ["step", "hook", "expect", "flow"] }
+      }
+    },
+    "stepEnd": {
+      "required": ["step", "ms", "ok"],
+      "properties": {
+        "step": { "$ref": "#/definitions/id" },
+        "ms": { "type": "number", "minimum": 0 },
+        "ok": { "type": "boolean" }
+      }
+    },
+    "testEnd": {
+      "required": ["test", "status", "ms", "retry"],
+      "properties": {
+        "test": { "$ref": "#/definitions/id" },
+        "status": { "enum": ["passed", "failed", "timedout", "skipped", "interrupted"] },
+        "ms": { "type": "number", "minimum": 0 },
+        "retry": { "type": "integer", "minimum": 0 },
+        "failure": { "$ref": "#/definitions/failure" }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "required": ["step", "message", "expected", "actual", "location", "aria", "console", "network", "screenshot", "trace"],
+      "properties": {
+        "step": { "type": "string", "description": "failing step; nested steps joined by ' › '" },
+        "message": { "type": "string" },
+        "expected": { "type": ["string", "null"], "description": "null when the failure is not a matcher failure" },
+        "actual": { "type": ["string", "null"] },
+        "location": { "type": ["string", "null"], "description": "absolute 'file:line' of the failing call" },
+        "aria": { "type": ["string", "null"], "description": "accessibility tree excerpt, at most 40 lines around the target" },
+        "console": { "type": "array", "maxItems": 5, "items": { "type": "string" } },
+        "network": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "required": ["method", "url", "status"],
+            "properties": {
+              "method": { "type": "string" },
+              "url": { "type": "string" },
+              "status": { "type": "integer", "description": "HTTP status, 0 when the request never got a response" }
+            }
+          }
+        },
+        "screenshot": { "type": ["string", "null"], "description": "absolute path" },
+        "trace": { "type": ["string", "null"], "description": "absolute path" }
+      }
+    },
+    "artifact": {
+      "required": ["test", "kind", "path"],
+      "properties": {
+        "test": { "$ref": "#/definitions/id" },
+        "kind": { "enum": ["screenshot", "trace", "video", "aria"] },
+        "path": { "type": "string", "description": "absolute path" }
+      }
+    },
+    "flowBegin": {
+      "required": ["test", "step", "flow", "inputs", "key"],
+      "properties": {
+        "test": { "$ref": "#/definitions/id" },
+        "step": { "$ref": "#/definitions/id" },
+        "flow": { "type": "string" },
+        "inputs": { "type": "object", "description": "redacted: values under password|secret|token|cookie|key keys are '***', strings are cut to 200 characters" },
+        "key": { "type": "string" }
+      }
+    },
+    "flowEnd": {
+      "required": ["step", "outputs", "checkpoint"],
+      "properties": {
+        "step": { "$ref": "#/definitions/id" },
+        "outputs": { "type": "object", "description": "redacted like the inputs of flow.begin" },
+        "checkpoint": { "enum": ["saved", "restored", "none"] },
+        "ms": { "type": "number", "minimum": 0, "description": "how long the flow call took" },
+        "reason": { "type": "string", "description": "why the flow ran although a checkpoint was possible, or why none was saved" }
+      }
+    },
+    "coverage": {
+      "required": ["test", "files"],
+      "properties": {
+        "test": { "$ref": "#/definitions/id" },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "incomplete": { "const": true, "description": "some source the test ran could not be attributed to a file: the test gets no known coverage and is always selected by --affected" }
+      }
+    },
+    "writes": {
+      "required": ["test", "tables"],
+      "properties": {
+        "test": { "$ref": "#/definitions/id" },
+        "tables": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "key": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "flowLookup": {
+      "description": "POST /hooks/flow/lookup, request",
+      "type": "object",
+      "required": ["flow", "source"],
+      "properties": {
+        "flow": { "type": "string" },
+        "source": { "type": "string", "description": "hash of the flow's source and declaration" },
+        "inputs": { "type": "string", "description": "hash of the inputs" },
+        "parent": { "type": "string", "description": "key of the flow that ran before at the same level, empty for the first" },
+        "browser": { "type": "boolean" },
+        "db": { "type": "boolean" }
+      }
+    },
+    "flowLookupAnswer": {
+      "type": "object",
+      "required": ["key", "hit", "save"],
+      "properties": {
+        "key": { "$ref": "#/definitions/key" },
+        "hit": { "type": "boolean", "description": "a checkpoint exists and may be restored" },
+        "save": { "type": "boolean", "description": "send a checkpoint after running the flow" },
+        "reason": { "type": "string" }
+      }
+    },
+    "flowSave": {
+      "description": "POST /hooks/flow/save, request",
+      "type": "object",
+      "required": ["key", "flow"],
+      "properties": {
+        "key": { "$ref": "#/definitions/key" },
+        "flow": { "type": "string" },
+        "browser": { "type": "boolean" },
+        "db": { "type": "boolean" },
+        "storageState": { "type": ["object", "null"] },
+        "outputs": { "type": "object" },
+        "replace": { "type": "boolean", "description": "overwrite a checkpoint that exists (a restored one failed verify)" }
+      }
+    },
+    "flowSaveAnswer": {
+      "type": "object",
+      "required": ["saved"],
+      "properties": { "saved": { "type": "boolean" }, "reason": { "type": "string" } }
+    },
+    "flowRestore": {
+      "description": "POST /hooks/flow/restore, request",
+      "type": "object",
+      "required": ["key"],
+      "properties": {
+        "key": { "$ref": "#/definitions/key" },
+        "reset": { "type": "boolean", "description": "put the shard's database back to what the flow started from instead of restoring" },
+        "parent": { "type": "string", "description": "with reset: key of the checkpoint the flow started from" }
+      }
+    },
+    "flowRestoreAnswer": {
+      "type": "object",
+      "properties": { "outputs": { "type": "object" }, "storageState": { "type": "object" } }
+    },
+    "coreEvent": {
+      "description": "events the core writes itself; a report cannot send them",
+      "oneOf": [
+        { "properties": { "t": { "const": "checkpoint.restored" }, "flow": { "type": "string" }, "key": { "type": "string" }, "db": { "type": "boolean" } } },
+        { "properties": { "t": { "const": "checkpoint.evicted" }, "flow": { "type": "string" }, "key": { "type": "string" }, "bytes": { "type": "integer" } } },
+        { "properties": { "t": { "const": "db.writes" }, "test": { "$ref": "#/definitions/id" }, "tables": { "type": "array", "items": { "type": "string" } } } }
+      ]
+    },
+    "end": {
+      "required": ["status"],
+      "properties": { "status": { "enum": ["passed", "failed", "timedout", "interrupted"] } }
+    }
+  }
+}

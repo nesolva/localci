@@ -1,0 +1,5 @@
+idle | sfimage=checkmark.circle
+---
+✓ e2e #41 · 128/128 passed · 5m · 3h00m ago | color=gray href=http://127.0.0.1:7357/runs/41
+---
+Open dashboard | href=http://127.0.0.1:7357

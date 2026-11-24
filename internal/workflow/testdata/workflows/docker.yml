@@ -1,0 +1,12 @@
+name: images
+on: pull_request
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          docker build -t acme/app:ci \
+            --tag acme/app:latest .
+          docker run --rm -e MODE=test -v "$PWD:/src" acme/app:ci make test
+          docker run -p 8080:80 nginx:1.27
+          docker build -t "acme/${NAME}" .

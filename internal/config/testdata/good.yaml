@@ -1,0 +1,11 @@
+version: 1
+repos:
+  - name: acme/api
+    workflows:
+      skip: [release.yml]
+  - name: acme/web
+server:
+  port: 9000
+capacity:
+  cpus: 4
+  memory: 8GiB

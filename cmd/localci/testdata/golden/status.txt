@@ -1,0 +1,3 @@
+localci up · 0 running · 1 queued · 4/10 cpus busy
+#42 queued e2e · acme/web working tree a1b2c3+ · 128 tests · 4 shards · ~6m · localci wait 42
+#42 failed 2/128 · e2e · 5m12s · localci show 42

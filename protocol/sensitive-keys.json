@@ -1,0 +1,4 @@
+{
+  "$comment": "Case-insensitive substrings of a flow input or output name whose value is replaced by *** in events. Go (internal/report/redact.go) and TypeScript (packages/playwright/src/flows.ts) each keep a copy and a test checks it equals this file.",
+  "keys": ["password", "passwd", "pwd", "secret", "token", "cookie", "key", "session", "auth", "jwt", "bearer", "credential"]
+}

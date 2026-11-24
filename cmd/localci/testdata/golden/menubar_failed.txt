@@ -1,0 +1,10 @@
+1 running · failed | sfimage=exclamationmark.triangle.fill color=red
+---
+e2e #43 · 2m10s · ~4m left | href=http://127.0.0.1:7357/runs/43
+---
+✗ e2e #42 · 2/128 failed · 5m · 20m ago | color=red
+--Open run | href=http://127.0.0.1:7357/runs/42
+--Retry | bash=/opt/bin/localci param1=menubar param2=retry param3=42 terminal=false refresh=true
+✓ e2e #41 · 128/128 passed · 5m · 3h00m ago | color=gray href=http://127.0.0.1:7357/runs/41
+---
+Open dashboard | href=http://127.0.0.1:7357

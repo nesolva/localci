@@ -1,0 +1,24 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "jvm",
+      "job": "maven",
+      "name": "maven",
+      "steps": [
+        {
+          "name": "Run mvn -q verify",
+          "run": "mvn -q verify"
+        }
+      ],
+      "toolchain": {
+        "go": "file:go.mod",
+        "java": "21",
+        "python": "3.10"
+      },
+      "key": "37bdadae29eb1c7d",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}

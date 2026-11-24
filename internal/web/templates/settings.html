@@ -1,0 +1,20 @@
+{{define "body"}}
+<section class="page narrow">
+  <h1 class="title">Settings</h1>
+  <section class="capacity">
+    <div class="cap"><span class="big">{{.CheckInUse}}<small>/{{.CheckSlots}}</small></span><span class="muted">check slots in use</span></div>
+    <div class="cap"><span class="big">{{.JobInUse}}<small>/{{.JobSlots}}</small></span><span class="muted">suite jobs in use</span></div>
+    <div class="cap"><span class="big">{{.Machine.CPUs}}</span><span class="muted">CPUs{{if .MemGB}} · {{.MemGB}} free{{end}}{{if .DockerGB}} · Docker {{.DockerGB}}{{end}}</span></div>
+  </section>
+  {{if .ConfigErr}}<p class="bad-text">{{.ConfigErr}}</p>{{end}}
+  {{if .HasConfig}}{{if not .ConfigErr}}
+  <p class="muted small">{{if .FileFound}}Read from <span class="mono">{{.File}}</span>.{{else}}No config file yet; everything below is a default or detected.{{end}} Each value shows where it came from.</p>
+  {{range .Groups}}
+  <h2 class="sub">{{.Name}}</h2>
+  <ul class="rows">
+  {{range .Lines}}<li class="row quiet"><span class="mono key">{{.Key}}</span><span class="grow mono">{{.Value}}</span><span class="src src-{{.Source}}">{{.Source}}</span></li>{{end}}
+  </ul>
+  {{end}}
+  {{end}}{{end}}
+</section>
+{{end}}

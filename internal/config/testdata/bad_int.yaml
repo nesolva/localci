@@ -1,0 +1,4 @@
+repos:
+  - name: acme/api
+capacity:
+  check_slots: many

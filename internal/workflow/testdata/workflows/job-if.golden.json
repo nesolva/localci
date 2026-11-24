@@ -1,0 +1,25 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "mixed",
+      "job": "always",
+      "name": "always",
+      "steps": [
+        {
+          "name": "Run make test",
+          "run": "make test"
+        }
+      ],
+      "key": "1e0a0e529e7b7548",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": [
+    {
+      "workflow": "mixed",
+      "job": "publish",
+      "reason": "if: github.event_name == 'push' is false"
+    }
+  ]
+}

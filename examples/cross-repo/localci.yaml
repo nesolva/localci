@@ -1,0 +1,37 @@
+# One suite across two repositories: the web app's tests run against the API. Run `localci run` from either
+# checkout and it tests that working tree; the other repository uses the same branch when it has an open pull
+# request, else its default branch.
+version: 1
+repos:
+  - name: acme/web
+  - name: acme/api
+suites:
+  e2e:
+    repos: [acme/web, acme/api]
+    trigger: {label: e2e}          # a pull request in either repository starts it when it has this label
+    prepare:
+      - {repo: acme/web, run: npm ci, cache_key: [package-lock.json], keep: [node_modules]}
+      - {repo: acme/api, run: npm ci, cache_key: [package-lock.json], keep: [node_modules]}
+    database:
+      driver: postgres
+      container: acme-postgres
+      user: postgres
+      template:
+        seed: npm run db:migrate
+        key: ["acme/api:db/migrations/**"]
+        repo: acme/api
+    stack:
+      - name: api
+        repo: acme/api
+        run: npm start
+        env: {PORT: '{{port "api"}}', DATABASE_URL: "{{db.url}}"}
+        ready: {http: 'http://127.0.0.1:{{port "api"}}/healthz'}
+      - name: web
+        repo: acme/web
+        run: npm start
+        env: {PORT: '{{port "web"}}', API_URL: 'http://127.0.0.1:{{port "api"}}'}
+        ready: {http: 'http://127.0.0.1:{{port "web"}}/'}
+    test:
+      repo: acme/web
+      run: npx playwright test
+      env: {BASE_URL: 'http://127.0.0.1:{{port "web"}}'}

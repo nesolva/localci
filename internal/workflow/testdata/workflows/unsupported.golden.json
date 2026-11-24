@@ -1,0 +1,70 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "release-check",
+      "job": "secrets",
+      "name": "secrets",
+      "steps": [
+        {
+          "name": "Run deploy --token ${{ secrets.DEPLOY_TOKEN }}",
+          "run": "deploy --token ${{ secrets.DEPLOY_TOKEN }}"
+        }
+      ],
+      "unsupported": "${{ secrets.DEPLOY_TOKEN }}: secrets.DEPLOY_TOKEN",
+      "key": "04844560304732cb",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "release-check",
+      "job": "outputs",
+      "name": "outputs",
+      "steps": [
+        {
+          "id": "probe",
+          "name": "Run echo \"hit=true\" \u003e\u003e \"$GITHUB_OUTPUT\"",
+          "run": "echo \"hit=true\" \u003e\u003e \"$GITHUB_OUTPUT\""
+        },
+        {
+          "name": "Run echo hit",
+          "run": "echo hit"
+        }
+      ],
+      "unsupported": "if: steps.probe.outputs.hit",
+      "key": "979cad131df094aa",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "release-check",
+      "job": "dynamic",
+      "name": "dynamic",
+      "steps": [
+        {
+          "name": "Run echo run",
+          "run": "echo run"
+        }
+      ],
+      "unsupported": "strategy.matrix is computed at run time (${{ fromJSON(needs.plan.outputs.matrix) }})",
+      "key": "6de4740d437359d9",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "release-check",
+      "job": "function",
+      "name": "function",
+      "steps": [
+        {
+          "name": "Run echo ${{ format('{0}', github.sha) }}",
+          "run": "echo ${{ format('{0}', github.sha) }}"
+        }
+      ],
+      "unsupported": "${{ format('{0}', github.sha) }}: function format()",
+      "key": "4c2659aa3207021f",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}

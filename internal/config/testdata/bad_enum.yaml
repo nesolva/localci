@@ -1,0 +1,4 @@
+repos:
+  - name: acme/api
+watch:
+  forks: sometimes

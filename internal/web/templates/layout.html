@@ -1,0 +1,27 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{.Title}} · localci</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+{{block "scripts" .}}{{end}}
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">localci</a>
+  <nav aria-label="Pages">
+    <a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>Overview</a>
+    <a href="/findings"{{if eq .Nav "findings"}} aria-current="page"{{end}}>Findings</a>
+    <a href="/settings"{{if eq .Nav "settings"}} aria-current="page"{{end}}>Settings</a>
+  </nav>
+  <span class="live" id="live" data-state="connecting" title="Updates arrive as they happen"><i></i><span>Live</span></span>
+</header>
+<main data-live data-seq="{{.Seq}}" data-run="{{.Run}}" data-follow="{{.Live}}">
+{{template "body" .}}
+</main>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+</body>
+</html>{{end}}

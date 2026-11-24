@@ -1,0 +1,9 @@
+{
+  "checks": [],
+  "skipped": [
+    {
+      "workflow": "release",
+      "reason": "branch main does not match branches"
+    }
+  ]
+}

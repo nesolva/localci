@@ -1,0 +1,22 @@
+name: ci
+on: pull_request
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make test
+      - name: only on push
+        if: github.event_name == 'push'
+        run: make publish
+      - name: only on PRs
+        if: ${{ github.event_name == 'pull_request' }}
+        run: make pr-comment
+      - name: upload failures
+        if: failure()
+        run: make upload-logs
+      - name: cleanup
+        if: always()
+        run: make clean
+      - name: summary
+        if: success() && github.event_name != 'push'
+        run: make summary

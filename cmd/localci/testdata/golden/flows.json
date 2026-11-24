@@ -1,0 +1,2 @@
+{"type":"flow","name":"create-tenant","inputs":{"name":"Acme"},"outputs":{"slug":"acme"},"tests":1,"calls":1,"run_ms":900,"restore_ms":0,"checkpointed":0,"hit_rate":0}
+{"type":"flow","name":"login","inputs":{"password":"***","user":"demo"},"outputs":{"user":"demo"},"tests":3,"calls":3,"run_ms":3200,"restore_ms":600,"checkpointed":3,"hit_rate":0.6666666666666666}

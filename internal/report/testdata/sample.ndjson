@@ -1,0 +1,147 @@
+{"v":1,"t":"begin","ts":1795136409865,"shard":1,"total":13}
+{"v":1,"t":"test.begin","ts":1795136410113,"test":"3f09ca1446307e2c","file":"auth.spec.ts","title":"signing in shows who you are","line":3,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136410124,"test":"3f09ca1446307e2c","step":"3f09ca1446307e2c:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136410283,"step":"3f09ca1446307e2c:1","ms":158,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136410400,"test":"3f09ca1446307e2c","step":"3f09ca1446307e2c:2","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136410411,"step":"3f09ca1446307e2c:2","ms":11,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136410411,"test":"3f09ca1446307e2c","step":"3f09ca1446307e2c:3","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136410432,"step":"3f09ca1446307e2c:3","ms":21,"ok":true}
+{"v":1,"t":"test.end","ts":1795136410433,"test":"3f09ca1446307e2c","status":"passed","ms":214,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136410433,"test":"464658c292b3fabd","file":"auth.spec.ts","title":"a wrong password is refused","line":8,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136410433,"test":"464658c292b3fabd","step":"464658c292b3fabd:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136410469,"step":"464658c292b3fabd:1","ms":37,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136410564,"test":"464658c292b3fabd","step":"464658c292b3fabd:2","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136410575,"step":"464658c292b3fabd:2","ms":12,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136410575,"test":"464658c292b3fabd","step":"464658c292b3fabd:3","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136410596,"step":"464658c292b3fabd:3","ms":21,"ok":true}
+{"v":1,"t":"test.end","ts":1795136410596,"test":"464658c292b3fabd","status":"passed","ms":158,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136410596,"test":"4c1e1f54682ed6c4","file":"auth.spec.ts","title":"the cart asks you to sign in first","line":13,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136410596,"test":"4c1e1f54682ed6c4","step":"4c1e1f54682ed6c4:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136410635,"step":"4c1e1f54682ed6c4:1","ms":38,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136410649,"test":"4c1e1f54682ed6c4","step":"4c1e1f54682ed6c4:2","parent":null,"title":"Expect \"toHaveURL\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136410660,"step":"4c1e1f54682ed6c4:2","ms":11,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136410661,"test":"4c1e1f54682ed6c4","step":"4c1e1f54682ed6c4:3","parent":null,"title":"Expect \"toBeVisible\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136410664,"step":"4c1e1f54682ed6c4:3","ms":4,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136410664,"test":"4c1e1f54682ed6c4","step":"4c1e1f54682ed6c4:4","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136410686,"step":"4c1e1f54682ed6c4:4","ms":22,"ok":true}
+{"v":1,"t":"test.end","ts":1795136410686,"test":"4c1e1f54682ed6c4","status":"passed","ms":85,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136410687,"test":"7711f9d986403c77","file":"cart.spec.ts","title":"adding a product updates the cart badge","line":3,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136410688,"test":"7711f9d986403c77","step":"7711f9d986403c77:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136410823,"step":"7711f9d986403c77:1","ms":135,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136410865,"test":"7711f9d986403c77","step":"7711f9d986403c77:2","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136410891,"step":"7711f9d986403c77:2","ms":26,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136410891,"test":"7711f9d986403c77","step":"7711f9d986403c77:3","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136410922,"step":"7711f9d986403c77:3","ms":31,"ok":true}
+{"v":1,"t":"test.end","ts":1795136410922,"test":"7711f9d986403c77","status":"passed","ms":230,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136410922,"test":"d6e0d4e4548284f0","file":"cart.spec.ts","title":"two widgets and a gizmo add up","line":8,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136410922,"test":"d6e0d4e4548284f0","step":"d6e0d4e4548284f0:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136411053,"step":"d6e0d4e4548284f0:1","ms":131,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136411053,"test":"d6e0d4e4548284f0","step":"d6e0d4e4548284f0:2","parent":null,"title":"add the products","kind":"step"}
+{"v":1,"t":"step.begin","ts":1795136411093,"test":"d6e0d4e4548284f0","step":"d6e0d4e4548284f0:3","parent":"d6e0d4e4548284f0:2","title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136411117,"step":"d6e0d4e4548284f0:3","ms":25,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136411141,"test":"d6e0d4e4548284f0","step":"d6e0d4e4548284f0:4","parent":"d6e0d4e4548284f0:2","title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136411165,"step":"d6e0d4e4548284f0:4","ms":24,"ok":true}
+{"v":1,"t":"step.end","ts":1795136411165,"step":"d6e0d4e4548284f0:2","ms":112,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136411165,"test":"d6e0d4e4548284f0","step":"d6e0d4e4548284f0:5","parent":null,"title":"raise the widgets to two","kind":"step"}
+{"v":1,"t":"step.begin","ts":1795136411208,"test":"d6e0d4e4548284f0","step":"d6e0d4e4548284f0:6","parent":"d6e0d4e4548284f0:5","title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136411239,"step":"d6e0d4e4548284f0:6","ms":31,"ok":true}
+{"v":1,"t":"step.end","ts":1795136411239,"step":"d6e0d4e4548284f0:5","ms":74,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136411239,"test":"d6e0d4e4548284f0","step":"d6e0d4e4548284f0:7","parent":null,"title":"check the total","kind":"step"}
+{"v":1,"t":"step.begin","ts":1795136411239,"test":"d6e0d4e4548284f0","step":"d6e0d4e4548284f0:8","parent":"d6e0d4e4548284f0:7","title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136416243,"step":"d6e0d4e4548284f0:8","ms":5003,"ok":false}
+{"v":1,"t":"step.end","ts":1795136416243,"step":"d6e0d4e4548284f0:7","ms":5003,"ok":false}
+{"v":1,"t":"step.begin","ts":1795136416243,"test":"d6e0d4e4548284f0","step":"d6e0d4e4548284f0:9","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136416298,"step":"d6e0d4e4548284f0:9","ms":56,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136416298,"test":"d6e0d4e4548284f0","step":"d6e0d4e4548284f0:10","parent":null,"title":"Worker Cleanup","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136416315,"step":"d6e0d4e4548284f0:10","ms":17,"ok":true}
+{"v":1,"t":"artifact","ts":1795136416329,"test":"d6e0d4e4548284f0","kind":"screenshot","path":"/work/acme-shop/test-results/cart-two-widgets-and-a-gizmo-add-up/test-failed-1.png"}
+{"v":1,"t":"artifact","ts":1795136416329,"test":"d6e0d4e4548284f0","kind":"trace","path":"/work/acme-shop/test-results/cart-two-widgets-and-a-gizmo-add-up/trace.zip"}
+{"v":1,"t":"artifact","ts":1795136416329,"test":"d6e0d4e4548284f0","kind":"aria","path":"/work/acme-shop/test-results/cart-two-widgets-and-a-gizmo-add-up/attachments/localci-aria-80d3e0806ea1b2d35c6d1b37010185116ae2a30a.yml"}
+{"v":1,"t":"test.end","ts":1795136416329,"test":"d6e0d4e4548284f0","status":"failed","ms":5370,"retry":0,"failure":{"step":"check the total › Expect \"toHaveText\"","message":"Error: expect(locator).toHaveText(expected) failed\n\nLocator:  getByTestId('cart-total')\nExpected: \"Total: $27.50\"\nReceived: \"Total: $17.50\"\nTimeout:  5000ms\n\nCall log:\n  - Expect \"toHaveText\" getByTestId('cart-total') with timeout 5000ms\n  - waiting for getByTestId('cart-total')\n    14 × locator resolved to <p data-total-cents=\"1750\" data-testid=\"cart-total\">Total: $17.50</p>\n       - unexpected value \"Total: $17.50\"\n","expected":"\"Total: $27.50\"","actual":"\"Total: $17.50\"","location":"/work/acme-shop/tests/cart.spec.ts:21","aria":"- main:\n  - heading \"Your cart\" [level=1]\n  - table \"Cart lines\":\n    - rowgroup:\n      - row \"Widget $10.00 Fewer Widget 2 More Widget $20.00 Remove Widget\":\n        - cell \"Widget\"\n        - cell \"$10.00\"\n        - cell \"Fewer Widget 2 More Widget\":\n          - button \"Fewer Widget\": −\n          - text: \"2\"\n          - button \"More Widget\": +\n        - cell \"$20.00\"\n        - cell \"Remove Widget\":\n          - button \"Remove Widget\"\n      - row \"Gizmo $7.50 Fewer Gizmo 1 More Gizmo $7.50 Remove Gizmo\":\n        - cell \"Gizmo\"\n        - cell \"$7.50\"\n        - cell \"Fewer Gizmo 1 More Gizmo\":\n          - button \"Fewer Gizmo\": −\n          - text: \"1\"\n          - button \"More Gizmo\": +\n        - cell \"$7.50\"\n        - cell \"Remove Gizmo\":\n          - button \"Remove Gizmo\"\n  - paragraph: \"Total: $17.50\"\n  - paragraph:\n    - link \"Checkout\":\n      - /url: /t/shop-two-widgets-and-a-gizmo-add-up/checkout","console":["cart total mismatch: lines add up to 2750 but the server says 1750","Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)"],"network":[{"method":"POST","url":"http://127.0.0.1:60341/api/mismatch","status":422}],"screenshot":"/work/acme-shop/test-results/cart-two-widgets-and-a-gizmo-add-up/test-failed-1.png","trace":"/work/acme-shop/test-results/cart-two-widgets-and-a-gizmo-add-up/trace.zip"}}
+{"v":1,"t":"test.begin","ts":1795136416574,"test":"59f387cde61fb97b","file":"cart.spec.ts","title":"removing the last line empties the cart","line":25,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136416585,"test":"59f387cde61fb97b","step":"59f387cde61fb97b:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136416844,"step":"59f387cde61fb97b:1","ms":259,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136416887,"test":"59f387cde61fb97b","step":"59f387cde61fb97b:2","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136416914,"step":"59f387cde61fb97b:2","ms":27,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136416959,"test":"59f387cde61fb97b","step":"59f387cde61fb97b:3","parent":null,"title":"Expect \"toBeVisible\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136416992,"step":"59f387cde61fb97b:3","ms":32,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136416992,"test":"59f387cde61fb97b","step":"59f387cde61fb97b:4","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136417025,"step":"59f387cde61fb97b:4","ms":33,"ok":true}
+{"v":1,"t":"test.end","ts":1795136417026,"test":"59f387cde61fb97b","status":"passed","ms":351,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136417029,"test":"2bc9d8479d981335","file":"catalog.spec.ts","title":"the catalog lists products with prices","line":3,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136417029,"test":"2bc9d8479d981335","step":"2bc9d8479d981335:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136417081,"step":"2bc9d8479d981335:1","ms":52,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417095,"test":"2bc9d8479d981335","step":"2bc9d8479d981335:2","parent":null,"title":"Expect \"toHaveCount\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136417105,"step":"2bc9d8479d981335:2","ms":10,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417105,"test":"2bc9d8479d981335","step":"2bc9d8479d981335:3","parent":null,"title":"Expect \"toContainText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136417108,"step":"2bc9d8479d981335:3","ms":3,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417108,"test":"2bc9d8479d981335","step":"2bc9d8479d981335:4","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136417132,"step":"2bc9d8479d981335:4","ms":24,"ok":true}
+{"v":1,"t":"test.end","ts":1795136417132,"test":"2bc9d8479d981335","status":"passed","ms":99,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136417133,"test":"fc09f74b84db09bd","file":"checkout.spec.ts","title":"paying creates an order","line":9,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136417134,"test":"fc09f74b84db09bd","step":"fc09f74b84db09bd:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136417266,"step":"fc09f74b84db09bd:1","ms":132,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417306,"test":"fc09f74b84db09bd","step":"fc09f74b84db09bd:2","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136417330,"step":"fc09f74b84db09bd:2","ms":24,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417374,"test":"fc09f74b84db09bd","step":"fc09f74b84db09bd:3","parent":null,"title":"Expect \"toBeVisible\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136417405,"step":"fc09f74b84db09bd:3","ms":31,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417405,"test":"fc09f74b84db09bd","step":"fc09f74b84db09bd:4","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136417407,"step":"fc09f74b84db09bd:4","ms":2,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417407,"test":"fc09f74b84db09bd","step":"fc09f74b84db09bd:5","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136417436,"step":"fc09f74b84db09bd:5","ms":29,"ok":true}
+{"v":1,"t":"test.end","ts":1795136417436,"test":"fc09f74b84db09bd","status":"passed","ms":298,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136417437,"test":"422a59ae75b1733a","file":"checkout.spec.ts","title":"an order shows up in the order history","line":17,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136417437,"test":"422a59ae75b1733a","step":"422a59ae75b1733a:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136417567,"step":"422a59ae75b1733a:1","ms":130,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417607,"test":"422a59ae75b1733a","step":"422a59ae75b1733a:2","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136417631,"step":"422a59ae75b1733a:2","ms":25,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417680,"test":"422a59ae75b1733a","step":"422a59ae75b1733a:3","parent":null,"title":"Expect \"toBeVisible\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136417689,"step":"422a59ae75b1733a:3","ms":9,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417689,"test":"422a59ae75b1733a","step":"422a59ae75b1733a:4","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136417706,"step":"422a59ae75b1733a:4","ms":17,"ok":true}
+{"v":1,"t":"test.end","ts":1795136417706,"test":"422a59ae75b1733a","status":"passed","ms":265,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136417706,"test":"4a9a5f385d82a234","file":"checkout.spec.ts","title":"an empty cart cannot be paid","line":25,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136417706,"test":"4a9a5f385d82a234","step":"4a9a5f385d82a234:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136417839,"step":"4a9a5f385d82a234:1","ms":133,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417883,"test":"4a9a5f385d82a234","step":"4a9a5f385d82a234:2","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136417910,"step":"4a9a5f385d82a234:2","ms":27,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136417910,"test":"4a9a5f385d82a234","step":"4a9a5f385d82a234:3","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136417941,"step":"4a9a5f385d82a234:3","ms":31,"ok":true}
+{"v":1,"t":"test.end","ts":1795136417941,"test":"4a9a5f385d82a234","status":"passed","ms":230,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136417942,"test":"2105ade04378647c","file":"settings.spec.ts","title":"a global tax rate is added to the cart total","line":5,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136417942,"test":"2105ade04378647c","step":"2105ade04378647c:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136418072,"step":"2105ade04378647c:1","ms":130,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418115,"test":"2105ade04378647c","step":"2105ade04378647c:2","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136418139,"step":"2105ade04378647c:2","ms":24,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418148,"test":"2105ade04378647c","step":"2105ade04378647c:3","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136418156,"step":"2105ade04378647c:3","ms":8,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418156,"test":"2105ade04378647c","step":"2105ade04378647c:4","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136418157,"step":"2105ade04378647c:4","ms":1,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418158,"test":"2105ade04378647c","step":"2105ade04378647c:5","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136418173,"step":"2105ade04378647c:5","ms":15,"ok":true}
+{"v":1,"t":"test.end","ts":1795136418173,"test":"2105ade04378647c","status":"passed","ms":226,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136418174,"test":"7d592d4a2b49ce95","file":"shops.spec.ts","title":"create a shop from the home page","line":3,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136418174,"test":"7d592d4a2b49ce95","step":"7d592d4a2b49ce95:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136418206,"step":"7d592d4a2b49ce95:1","ms":31,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418265,"test":"7d592d4a2b49ce95","step":"7d592d4a2b49ce95:2","parent":null,"title":"Expect \"toHaveURL\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136418297,"step":"7d592d4a2b49ce95:2","ms":32,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418297,"test":"7d592d4a2b49ce95","step":"7d592d4a2b49ce95:3","parent":null,"title":"Expect \"toBeVisible\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136418300,"step":"7d592d4a2b49ce95:3","ms":3,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418300,"test":"7d592d4a2b49ce95","step":"7d592d4a2b49ce95:4","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136418329,"step":"7d592d4a2b49ce95:4","ms":29,"ok":true}
+{"v":1,"t":"test.end","ts":1795136418329,"test":"7d592d4a2b49ce95","status":"passed","ms":151,"retry":0}
+{"v":1,"t":"test.begin","ts":1795136418329,"test":"1633688ed9d696da","file":"shops.spec.ts","title":"shops keep separate carts","line":11,"retry":0}
+{"v":1,"t":"step.begin","ts":1795136418329,"test":"1633688ed9d696da","step":"1633688ed9d696da:1","parent":null,"title":"Before Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136418364,"step":"1633688ed9d696da:1","ms":35,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418507,"test":"1633688ed9d696da","step":"1633688ed9d696da:2","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136418532,"step":"1633688ed9d696da:2","ms":25,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418648,"test":"1633688ed9d696da","step":"1633688ed9d696da:3","parent":null,"title":"Expect \"toHaveText\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136418672,"step":"1633688ed9d696da:3","ms":24,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418680,"test":"1633688ed9d696da","step":"1633688ed9d696da:4","parent":null,"title":"Expect \"toBeVisible\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136418688,"step":"1633688ed9d696da:4","ms":9,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418688,"test":"1633688ed9d696da","step":"1633688ed9d696da:5","parent":null,"title":"Expect \"toHaveCount\"","kind":"expect"}
+{"v":1,"t":"step.end","ts":1795136418690,"step":"1633688ed9d696da:5","ms":2,"ok":true}
+{"v":1,"t":"step.begin","ts":1795136418690,"test":"1633688ed9d696da","step":"1633688ed9d696da:6","parent":null,"title":"After Hooks","kind":"hook"}
+{"v":1,"t":"step.end","ts":1795136418705,"step":"1633688ed9d696da:6","ms":15,"ok":true}
+{"v":1,"t":"test.end","ts":1795136418706,"test":"1633688ed9d696da","status":"passed","ms":372,"retry":0}
+{"v":1,"t":"end","ts":1795136418742,"status":"failed"}

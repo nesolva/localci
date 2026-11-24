@@ -1,0 +1,62 @@
+{{define "body"}}
+<section class="page">
+{{if .Running}}
+  <div class="running">
+  {{range .Running}}
+    <article class="live-run">
+      <div class="live-head">
+        <div class="live-id">
+          <a class="live-suite" href="/runs/{{.ID}}">{{.Suite}}</a>
+          <span class="muted">{{who .Trigger .By}}</span>
+        </div>
+        <div class="live-time">
+          <time class="big" data-since="{{.Started}}">{{.Elapsed}}</time>
+          <span class="muted">{{if .Preparing}}preparing{{else if .Left}}{{.Left}} left{{else}}estimating…{{end}}</span>
+        </div>
+      </div>
+      {{if .Shards}}
+      <ul class="meters" aria-label="Progress per shard">
+      {{range .Shards}}
+        <li><span class="n">{{if .N}}{{.N}}{{else}}·{{end}}</span>
+          <span class="meter" role="progressbar" aria-valuenow="{{.Done}}" aria-valuemax="{{.Total}}" aria-label="Shard {{.N}}"><i class="done" style="width:{{pct .Pct}}"></i>{{if .Failed}}<i class="bad" style="width:{{pct .FailPct}}"></i>{{end}}</span>
+          <span class="count">{{.Done}}/{{.Total}}</span></li>
+      {{end}}
+      </ul>
+      {{end}}
+      <a class="more" href="/runs/{{.ID}}">Open timeline →</a>
+    </article>
+  {{end}}
+  </div>
+{{else}}
+  <div class="idle">
+    <h1 class="title">Nothing is running</h1>
+    <p class="muted">{{if .Queue}}{{len .Queue}} waiting for a free slot.{{else}}New runs show up here as they start.{{end}}</p>
+  </div>
+{{end}}
+
+{{if .Queue}}
+  <h2 class="sub">Queue</h2>
+  <ul class="rows">
+  {{range .Queue}}
+    <li class="row quiet"><span class="pos">{{.Pos}}</span>
+      <a class="grow" href="/runs/{{.ID}}"><b>{{.Suite}}</b> <span class="muted">{{who .Trigger .By}}</span></a>
+      <span class="muted">waiting <time data-since="{{.Since}}"></time></span></li>
+  {{end}}
+  </ul>
+{{end}}
+
+{{if .Recent}}
+  <h2 class="sub">Recent</h2>
+  <ul class="rows recent">
+  {{range .Recent}}
+    <li class="row {{if eq .State "failed"}}is-failed{{else}}quiet{{end}}">
+      <i class="dot s-{{.State}}" aria-hidden="true"></i>
+      <a class="grow" href="/runs/{{.ID}}"><b>{{.Suite}}</b> <span class="muted">{{who .Trigger .By}}</span>{{if and .Reason (ne .State "failed")}} <span class="muted">· {{.Reason}}</span>{{end}}</a>
+      {{if eq .State "failed"}}<span class="bad-text">{{.Failures}} failed</span>{{else if ne .State "passed"}}<span class="muted">{{.State}}</span>{{end}}
+      <span class="muted num">{{.Duration}}</span>
+      <span class="muted ago">{{ago .Finished}}</span></li>
+  {{end}}
+  </ul>
+{{end}}
+</section>
+{{end}}

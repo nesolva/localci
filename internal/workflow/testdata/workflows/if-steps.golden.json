@@ -1,0 +1,32 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "ci",
+      "job": "test",
+      "name": "test",
+      "steps": [
+        {
+          "name": "Run make test",
+          "run": "make test"
+        },
+        {
+          "name": "only on PRs",
+          "run": "make pr-comment"
+        },
+        {
+          "name": "cleanup",
+          "run": "make clean",
+          "always": true
+        },
+        {
+          "name": "summary",
+          "run": "make summary"
+        }
+      ],
+      "key": "f999c4537fee9b60",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}

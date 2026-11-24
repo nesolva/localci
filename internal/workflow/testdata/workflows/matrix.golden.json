@@ -1,0 +1,154 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "ci",
+      "job": "test",
+      "name": "unit (18, ubuntu-latest)",
+      "matrix": {
+        "node": "18",
+        "os": "ubuntu-latest"
+      },
+      "steps": [
+        {
+          "name": "Run npm test -- --shard=18",
+          "run": "npm test -- --shard=18",
+          "env": {
+            "COVERAGE": ""
+          }
+        }
+      ],
+      "toolchain": {
+        "node": "18"
+      },
+      "env": {
+        "CI": "true"
+      },
+      "key": "f8e92e31c38d7cd5",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "ci",
+      "job": "test",
+      "name": "unit (20, ubuntu-latest, true)",
+      "matrix": {
+        "coverage": "true",
+        "node": "20",
+        "os": "ubuntu-latest"
+      },
+      "steps": [
+        {
+          "name": "Run npm test -- --shard=20",
+          "run": "npm test -- --shard=20",
+          "env": {
+            "COVERAGE": "true"
+          }
+        }
+      ],
+      "toolchain": {
+        "node": "20"
+      },
+      "env": {
+        "CI": "true"
+      },
+      "key": "f63edf3eb1ac7b86",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "ci",
+      "job": "test",
+      "name": "unit (20, macos-latest)",
+      "matrix": {
+        "node": "20",
+        "os": "macos-latest"
+      },
+      "steps": [
+        {
+          "name": "Run npm test -- --shard=20",
+          "run": "npm test -- --shard=20",
+          "env": {
+            "COVERAGE": ""
+          }
+        }
+      ],
+      "toolchain": {
+        "node": "20"
+      },
+      "env": {
+        "CI": "true"
+      },
+      "key": "f7fd652bc5650171",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "ci",
+      "job": "test",
+      "name": "unit (22, ubuntu-latest)",
+      "matrix": {
+        "node": "22",
+        "os": "ubuntu-latest"
+      },
+      "steps": [
+        {
+          "name": "Run npm test -- --shard=22",
+          "run": "npm test -- --shard=22",
+          "env": {
+            "COVERAGE": ""
+          }
+        }
+      ],
+      "toolchain": {
+        "node": "22"
+      },
+      "env": {
+        "CI": "true"
+      },
+      "key": "e706847622d58a53",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "ci",
+      "job": "lint",
+      "name": "lint eslint",
+      "matrix": {
+        "tool": "eslint"
+      },
+      "steps": [
+        {
+          "name": "Run npx eslint .",
+          "run": "npx eslint ."
+        }
+      ],
+      "env": {
+        "CI": "true"
+      },
+      "key": "d510b8e78a10e310",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "ci",
+      "job": "lint",
+      "name": "lint prettier",
+      "matrix": {
+        "tool": "prettier"
+      },
+      "steps": [
+        {
+          "name": "Run npx prettier .",
+          "run": "npx prettier ."
+        }
+      ],
+      "env": {
+        "CI": "true"
+      },
+      "key": "61cedced1a361ede",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}

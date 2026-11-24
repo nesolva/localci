@@ -1,0 +1,46 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "ci",
+      "job": "short",
+      "name": "short",
+      "steps": [
+        {
+          "name": "Run go version",
+          "run": "go version"
+        }
+      ],
+      "container": {
+        "image": "golang:1.24"
+      },
+      "key": "155d77f11d3b431f",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "ci",
+      "job": "long",
+      "name": "long",
+      "steps": [
+        {
+          "name": "Run node --version",
+          "run": "node --version"
+        }
+      ],
+      "container": {
+        "image": "node:20-alpine",
+        "env": {
+          "NODE_ENV": "test"
+        },
+        "volumes": [
+          "/tmp/cache:/cache"
+        ],
+        "options": "--cpus 2"
+      },
+      "key": "e8d07c47a3936311",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,44 @@
+# A suite with a real stack: a Postgres container, an API and a web app. Every shard gets its own copies, on its own
+# ports, with a database cloned from a template that is rebuilt only when the migrations change.
+version: 1
+repos:
+  - name: acme/shop
+suites:
+  e2e:
+    repos: [acme/shop]
+    trigger: {push: true}          # every new head of a pull request
+    prepare:
+      - repo: acme/shop
+        run: npm ci
+        cache_key: [package-lock.json]
+        keep: [node_modules]
+    database:
+      driver: postgres             # needs createdb and dropdb on the PATH
+      container: acme-postgres     # an already running container with the Postgres tools
+      user: postgres
+      template:
+        seed: npm run db:migrate && npm run db:seed
+        key: ["acme/shop:db/migrations/**", "acme/shop:db/seed.sql"]
+    stack:
+      - name: api
+        repo: acme/shop
+        run: npm run start:api
+        env:
+          PORT: '{{port "api"}}'
+          DATABASE_URL: "{{db.url}}"
+        ready: {http: 'http://127.0.0.1:{{port "api"}}/healthz', timeout: 60s}
+      - name: web
+        repo: acme/shop
+        run: npm run start:web
+        env:
+          PORT: '{{port "web"}}'
+          API_URL: 'http://127.0.0.1:{{port "api"}}'
+        ready: {http: 'http://127.0.0.1:{{port "web"}}/', timeout: 60s}
+    test:
+      repo: acme/shop
+      run: npx playwright test
+      env:
+        BASE_URL: 'http://127.0.0.1:{{port "web"}}'
+    isolation: auto                # share one database or one stack when the tests are measured to allow it
+    shards: auto
+    timeout: 20m

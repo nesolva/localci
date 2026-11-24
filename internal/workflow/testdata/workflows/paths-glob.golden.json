@@ -1,0 +1,19 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "glob",
+      "job": "build",
+      "name": "build",
+      "steps": [
+        {
+          "name": "Run make build",
+          "run": "make build"
+        }
+      ],
+      "key": "0f4d4010633fba27",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}

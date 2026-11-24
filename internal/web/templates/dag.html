@@ -1,0 +1,38 @@
+{{define "scripts"}}<script src="/static/dag.js" defer></script>{{end}}
+{{define "body"}}
+<section class="page">
+  {{template "runhead" .}}
+
+  {{with .DAG}}
+  {{if .Nodes}}
+  <p class="muted dag-sum">{{len .Nodes}} flow{{if ne (len .Nodes) 1}}s{{end}} · {{.Restored}} of {{.Calls}} calls restored from a checkpoint{{if .Loose}} · {{.Loose}} test{{if ne .Loose 1}}s{{end}} call no flow{{end}}</p>
+  <div class="dag" role="group" aria-label="Flows called by this run's tests, left to right in the order they ran">
+    <div class="dag-canvas" style="width:{{.W}}px;height:{{.H}}px">
+      <svg class="dag-edges" width="{{.W}}" height="{{.H}}" viewBox="0 0 {{.W}} {{.H}}" aria-hidden="true">
+        {{range .Edges}}<path d="{{.Path}}" data-from="{{.From}}" data-to="{{.To}}"/>{{end}}
+      </svg>
+      {{range .Nodes}}
+      <div class="node s-{{.State}}" data-key="{{.Key}}" style="left:{{.X}}px;top:{{.Y}}px;height:{{.H}}px">
+        <button type="button" class="n-pick" aria-pressed="false">
+          <span class="n-top"><b class="n-name">{{.Name}}</b><span class="n-time num">{{.Time}}</span></span>
+          <span class="n-in mono">{{.Inputs}}</span>
+          <span class="n-meta">{{.Meta}}</span>
+          <i class="n-bar"><i style="width:{{pct .Bar}}"></i></i>
+        </button>
+        {{if .Tests}}<span class="n-tests">{{range .Tests}}<a class="d {{.Class}}" href="/runs/{{$.R.ID}}/tests/{{.ID}}" data-tip="{{.Title}}" aria-label="{{.Title}}"></a>{{end}}</span>{{end}}
+        {{if .More}}<span class="n-more small muted">+{{.More}} more tests</span>{{end}}
+      </div>
+      {{end}}
+    </div>
+  </div>
+  <h2 class="sub">Timeline</h2>
+  {{else}}
+  <div class="timeline empty"><p class="muted">{{if $.Active}}Flows appear here as tests call them.{{else}}No test in this run called a flow.{{end}}</p></div>
+  <h2 class="sub">Timeline</h2>
+  {{end}}
+  {{end}}
+
+  {{template "timeline" .}}
+  {{template "failures" .}}
+</section>
+{{end}}

@@ -1,0 +1,264 @@
+package exec
+
+import (
+	"context"
+	"errors"
+	"os"
+	osexec "os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+var bg = context.Background()
+
+// run executes git in dir for test setup and fails the test on error.
+func run(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := osexec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func write(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// newOrigin makes a repo "acme/web" with one commit on main.
+func newOrigin(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "origin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run(t, dir, "init", "-q")
+	write(t, filepath.Join(dir, "app.txt"), "one\ntwo\nthree\n")
+	run(t, dir, "add", ".")
+	run(t, dir, "commit", "-q", "-m", "base")
+	return dir
+}
+
+func newMirror(t *testing.T, origin string) *Mirror {
+	t.Helper()
+	m, err := EnsureMirror(bg, t.TempDir(), "acme/web", origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+// pull publishes branch as pull request n; clean also publishes the merge ref
+// the forge creates when the pull request merges into main.
+func pull(t *testing.T, origin string, n, branch string, clean bool) {
+	t.Helper()
+	run(t, origin, "update-ref", "refs/pull/"+n+"/head", branch)
+	if clean {
+		run(t, origin, "checkout", "-q", "-b", "merge-"+n, "main")
+		run(t, origin, "merge", "-q", "--no-ff", "-m", "merge", branch)
+		run(t, origin, "update-ref", "refs/pull/"+n+"/merge", "HEAD")
+		run(t, origin, "checkout", "-q", "main")
+	}
+}
+
+func TestPullMergeRefAndConflict(t *testing.T) {
+	origin := newOrigin(t)
+
+	// PR 1 edits line three, main later edits line one: merges cleanly.
+	run(t, origin, "checkout", "-q", "-b", "feat-clean")
+	write(t, filepath.Join(origin, "app.txt"), "one\ntwo\nTHREE\n")
+	run(t, origin, "commit", "-q", "-am", "pr1")
+	run(t, origin, "checkout", "-q", "main")
+	write(t, filepath.Join(origin, "app.txt"), "ONE\ntwo\nthree\n")
+	run(t, origin, "commit", "-q", "-am", "main moves")
+	pull(t, origin, "1", "feat-clean", true)
+
+	// PR 2 edits line one too: no merge ref.
+	run(t, origin, "checkout", "-q", "-b", "feat-conflict", "HEAD~1")
+	write(t, filepath.Join(origin, "app.txt"), "uno\ntwo\nthree\n")
+	run(t, origin, "commit", "-q", "-am", "pr2")
+	run(t, origin, "checkout", "-q", "main")
+	pull(t, origin, "2", "feat-conflict", false)
+
+	m := newMirror(t, origin)
+
+	got, err := m.FetchPull(bg, 1, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := OpenWorkspace(t.TempDir(), "e2e", "acme/web")
+	if err := ws.Checkout(bg, m, got.Merge, nil); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := os.ReadFile(filepath.Join(ws.Dir, "app.txt"))
+	if string(body) != "ONE\ntwo\nTHREE\n" {
+		t.Fatalf("PR 1 must run on the merge commit (both changes), got %q", body)
+	}
+
+	_, err = m.FetchPull(bg, 2, "main")
+	var mc *MergeConflictError
+	if !asMergeConflict(err, &mc) || err.Error() != "merge conflict with main" {
+		t.Fatalf("PR 2: want merge conflict with main, got %v", err)
+	}
+
+	// PR 1 turns conflicting later: the merge commit fetched earlier must not be reused.
+	run(t, origin, "update-ref", "-d", "refs/pull/1/merge")
+	if _, err := m.FetchPull(bg, 1, "main"); !asMergeConflict(err, &mc) {
+		t.Fatalf("stale merge ref must not survive, got %v", err)
+	}
+}
+
+func asMergeConflict(err error, target **MergeConflictError) bool {
+	return errors.As(err, target)
+}
+
+func TestSnapshotLeavesCheckoutUntouched(t *testing.T) {
+	origin := newOrigin(t)
+	m := newMirror(t, origin)
+
+	write(t, filepath.Join(origin, "app.txt"), "one\nEDITED\nthree\n") // tracked, unstaged
+	write(t, filepath.Join(origin, "new.txt"), "untracked\n")
+	write(t, filepath.Join(origin, ".gitignore"), "ignored.log\n")
+	write(t, filepath.Join(origin, "ignored.log"), "x\n")
+	before := run(t, origin, "status", "--porcelain")
+
+	s, err := m.Snapshot(bg, origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.Dirty {
+		t.Fatal("snapshot of a modified tree must be dirty")
+	}
+	if got := run(t, m.Dir, "show", s.SHA+":app.txt"); got != "one\nEDITED\nthree" {
+		t.Fatalf("uncommitted tracked change missing from the snapshot: %q", got)
+	}
+	if len(s.Untracked) != 2 || s.Untracked[0] != ".gitignore" || s.Untracked[1] != "new.txt" {
+		// .gitignore is untracked here; ignored.log is ignored and not reported
+		t.Fatalf("untracked files: %v", s.Untracked)
+	}
+	if after := run(t, origin, "status", "--porcelain"); after != before {
+		t.Fatalf("checkout changed:\nbefore %q\nafter  %q", before, after)
+	}
+
+	// A clean checkout yields HEAD.
+	run(t, origin, "checkout", "-q", "app.txt")
+	run(t, origin, "clean", "-fdxq")
+	s, err = m.Snapshot(bg, origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Dirty || s.SHA != run(t, origin, "rev-parse", "HEAD") {
+		t.Fatalf("clean checkout: %+v", s)
+	}
+}
+
+// A URL, path or ref that starts with "-" is an argument, never a git option.
+func TestGitArgumentsStartingWithADashAreNotOptions(t *testing.T) {
+	work := t.TempDir()
+	t.Chdir(work)
+	origin := newOrigin(t)
+	if err := os.Rename(origin, filepath.Join(work, "-origin")); err != nil {
+		t.Fatal(err)
+	}
+	m, err := EnsureMirror(bg, t.TempDir(), "acme/web", "-origin")
+	if err != nil {
+		t.Fatalf("a repository path starting with a dash: %v", err)
+	}
+	marker := filepath.Join(t.TempDir(), "ran")
+	err = m.Fetch(bg, "--upload-pack=touch "+marker+" #")
+	if _, statErr := os.Stat(marker); statErr == nil || err == nil {
+		t.Fatalf("a refspec became --upload-pack (err %v)", err)
+	}
+	write(t, filepath.Join(work, "-origin", "app.txt"), "edited\n")
+	if _, err := m.Snapshot(bg, "-origin"); err != nil {
+		t.Fatalf("snapshot of a checkout whose path starts with a dash: %v", err)
+	}
+}
+
+func TestGitErrorsDoNotShowCredentials(t *testing.T) {
+	_, err := EnsureMirror(bg, t.TempDir(), "acme/web", "https://bot:s3cret-token@127.0.0.1:1/acme/web.git")
+	var ge *GitError
+	if !errors.As(err, &ge) {
+		t.Fatalf("err = %v, want a GitError", err)
+	}
+	if msg := err.Error(); strings.Contains(msg, "s3cret-token") || strings.Contains(msg, "bot:") || !strings.Contains(msg, "127.0.0.1:1/acme/web.git") {
+		t.Fatalf("error = %q", msg)
+	}
+}
+
+func TestWarmWorkspaceKeepsOnlyKeptPaths(t *testing.T) {
+	origin := newOrigin(t)
+	first := run(t, origin, "rev-parse", "HEAD")
+	write(t, filepath.Join(origin, "app.txt"), "v2\n")
+	run(t, origin, "commit", "-q", "-am", "v2")
+	second := run(t, origin, "rev-parse", "HEAD")
+	m := newMirror(t, origin)
+	if err := m.Fetch(bg, "+refs/heads/*:refs/heads/*"); err != nil {
+		t.Fatal(err)
+	}
+
+	ws := OpenWorkspace(t.TempDir(), "e2e", "acme/web")
+	keep := []string{"node_modules/"}
+	if err := ws.Checkout(bg, m, first, keep); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(ws.Dir, "node_modules", "dep", "index.js"), "installed\n")
+	write(t, filepath.Join(ws.Dir, "stray.txt"), "left by the last run\n")
+	write(t, filepath.Join(ws.Dir, "app.txt"), "dirtied by the last run\n")
+
+	if err := ws.Checkout(bg, m, second, keep); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(ws.Dir, "node_modules", "dep", "index.js")); err != nil {
+		t.Fatalf("kept node_modules must survive: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(ws.Dir, "stray.txt")); err == nil {
+		t.Fatal("other untracked files must be removed")
+	}
+	if b, _ := os.ReadFile(filepath.Join(ws.Dir, "app.txt")); string(b) != "v2\n" {
+		t.Fatalf("workspace must be at the new sha with a clean tree, got %q", b)
+	}
+}
+
+// A git killed mid-checkout leaves .git/index.lock behind, and every later checkout of that workspace dies on it.
+// The repository's own lock files go; a *.lock in the working tree is a tracked file of the project.
+func TestCheckoutClearsLockFilesALeftByAKilledGit(t *testing.T) {
+	origin := newOrigin(t)
+	write(t, filepath.Join(origin, "yarn.lock"), "# lockfile\n")
+	run(t, origin, "add", ".")
+	run(t, origin, "commit", "-q", "-m", "lockfile")
+	head := run(t, origin, "rev-parse", "HEAD")
+	m := newMirror(t, origin)
+	if err := m.Fetch(bg, "+refs/heads/*:refs/heads/*"); err != nil {
+		t.Fatal(err)
+	}
+	ws := OpenWorkspace(t.TempDir(), "e2e", "acme/web")
+	if err := ws.Checkout(bg, m, head, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	old := time.Now().Add(-time.Hour) // for a host without lsof, which then goes by age
+	for _, name := range []string{"index.lock", "HEAD.lock"} {
+		lock := filepath.Join(ws.Dir, ".git", name)
+		write(t, lock, "")
+		if err := os.Chtimes(lock, old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := ws.Checkout(bg, m, head, nil); err != nil {
+		t.Fatalf("checkout after a killed git: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(ws.Dir, "yarn.lock")); err != nil {
+		t.Fatalf("a tracked *.lock file of the project must survive: %v", err)
+	}
+}

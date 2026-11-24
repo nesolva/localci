@@ -1,0 +1,34 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "web",
+      "job": "build",
+      "name": "build",
+      "steps": [
+        {
+          "name": "Run npm ci",
+          "run": "npm ci",
+          "shell": "bash",
+          "workingDirectory": "web/app"
+        },
+        {
+          "name": "Run npm run build",
+          "run": "npm run build",
+          "env": {
+            "LEVEL": "job-step"
+          },
+          "shell": "bash",
+          "workingDirectory": "web/other"
+        }
+      ],
+      "env": {
+        "KEEP": "workflow",
+        "LEVEL": "job"
+      },
+      "key": "6d792a3534575109",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}
