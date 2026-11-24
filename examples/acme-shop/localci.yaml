@@ -14,7 +14,7 @@ suites:
         keep: [node_modules]
     database:
       driver: command      # the sample's "database" is one JSON file, so a clone is a copy
-      template: {seed: "echo '{\"tenants\":{}}' > {{db.url}}"}
+      template: {seed: "echo '{\"tenants\":{}}' > '{{db.url}}'"}
       create: "cp {{template}} {{name}}"
       drop: "rm -f {{name}}"
     test:

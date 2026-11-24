@@ -53,7 +53,8 @@ func TestCLIAgainstARunningServeOnTheSample(t *testing.T) {
 	t.Setenv("GIT_CONFIG_KEY_0", "url."+src+".insteadOf")
 	t.Setenv("GIT_CONFIG_VALUE_0", "https://github.com/acme/shop.git")
 
-	home, err := os.MkdirTemp("", "lc") // short: the socket lives under it
+	// short: the socket lives under it; a space, like macOS's "Application Support", so unquoted paths break here
+	home, err := os.MkdirTemp("", "l c")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,9 +72,9 @@ func TestCLIAgainstARunningServeOnTheSample(t *testing.T) {
         run: 'ln -sfn %s/node_modules node_modules'
         cache_key: [package.json]
         keep: [node_modules]
-    database:
+    database:  # the sample's (examples/acme-shop/localci.yaml)
       driver: command
-      template: {seed: "echo '{\"tenants\":{}}' > {{db.url}}"}
+      template: {seed: "echo '{\"tenants\":{}}' > '{{db.url}}'"}
       create: "cp {{template}} {{name}}"
       drop: "rm -f {{name}}"
     test:

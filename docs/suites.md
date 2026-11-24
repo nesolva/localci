@@ -42,7 +42,7 @@ Inside `env`, `run`, `ready` and database commands:
 | Template | Value |
 |---|---|
 | `{{port "name"}}` | a free port, the same wherever the same name is used in one shard |
-| `{{db.url}}` | this shard's database (a connection URL for Postgres, the file for the `command` driver) |
+| `{{db.url}}` | this shard's database (a connection URL for Postgres, the file for the `command` driver). In a shell command, quote it (`'{{db.url}}'`): on macOS the file is under `Application Support`, which has a space |
 | `{{template}}`, `{{name}}` | in the `command` driver's `create`, `drop` and `snapshot`: the template and the database being made or dropped |
 
 ## In your Playwright project
