@@ -1,0 +1,6 @@
+✗ checkout › pays with saved card · tests/cart.spec.ts:41 · shard 2 · 8.1s
+  step: click "Pay" · expected: enabled · actual: disabled
+  aria: - button "Pay" [disabled]
+  console: TypeError: card is undefined (app.js:210) · network: POST /api/payments 500
+  files: /data/runs/42/s2/screenshot.png /data/runs/42/s2/trace.zip
+1 more: localci show 42 --all

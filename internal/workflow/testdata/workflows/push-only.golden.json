@@ -1,0 +1,9 @@
+{
+  "checks": [],
+  "skipped": [
+    {
+      "workflow": "deploy",
+      "reason": "does not trigger on pull_request"
+    }
+  ]
+}

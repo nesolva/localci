@@ -1,0 +1,16 @@
+# Run a repository's GitHub Actions workflows on this machine for every pull request and post the results back
+# as commit statuses. Needs `gh auth login` (or GH_TOKEN) with access to the repository.
+version: 1
+repos:
+  - name: acme/shop
+    workflows:
+      skip: [release.yml]          # workflow files localci should leave alone
+watch:
+  poll: 60s
+  max_age: 24h
+  drafts: false
+  forks: label                     # a fork's pull request runs only with ok-to-test AND a writer's approval
+fidelity:
+  merge_ref: true                  # test what the merge would produce
+  path_filters: true
+  toolchains: auto

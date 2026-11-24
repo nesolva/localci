@@ -1,0 +1,24 @@
+name: release-check
+on: pull_request
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - run: deploy --token ${{ secrets.DEPLOY_TOKEN }}
+  outputs:
+    runs-on: ubuntu-latest
+    steps:
+      - id: probe
+        run: echo "hit=true" >> "$GITHUB_OUTPUT"
+      - if: steps.probe.outputs.hit == 'true'
+        run: echo hit
+  dynamic:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - run: echo run
+  function:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ${{ format('{0}', github.sha) }}

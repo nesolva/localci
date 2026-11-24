@@ -1,0 +1,19 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "backend",
+      "job": "test",
+      "name": "test",
+      "steps": [
+        {
+          "name": "Run go test ./...",
+          "run": "go test ./..."
+        }
+      ],
+      "key": "9197a6f649f06a5d",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}

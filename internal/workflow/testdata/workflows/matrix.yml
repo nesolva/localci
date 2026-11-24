@@ -1,0 +1,38 @@
+name: ci
+on: pull_request
+env:
+  CI: "true"
+jobs:
+  test:
+    name: unit
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20]
+        os: [ubuntu-latest, macos-latest]
+        exclude:
+          - node: 18
+            os: macos-latest
+        include:
+          - node: 20
+            os: ubuntu-latest
+            coverage: true
+          - node: 22
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test -- --shard=${{ matrix.node }}
+        env:
+          COVERAGE: ${{ matrix.coverage }}
+  lint:
+    name: lint ${{ matrix.tool }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tool: [eslint, prettier]
+    steps:
+      - run: npx ${{ matrix.tool }} .

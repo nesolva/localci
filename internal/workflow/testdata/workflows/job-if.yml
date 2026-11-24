@@ -1,0 +1,12 @@
+name: mixed
+on: [push, pull_request]
+jobs:
+  always:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make test
+  publish:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - run: make publish

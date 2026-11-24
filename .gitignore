@@ -1,0 +1,14 @@
+/bin/
+/dist/
+*.test
+*.out
+.DS_Store
+.local/
+
+node_modules/
+packages/*/dist/
+test-results/
+playwright-report/
+/examples/*/data/
+/localci
+/.release

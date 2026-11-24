@@ -1,0 +1,2 @@
+log: /data/logs/42/shard-2.log
+  Error: card is undefined

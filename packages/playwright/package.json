@@ -1,0 +1,37 @@
+{
+  "name": "@nesolva/localci-playwright",
+  "version": "0.1.0",
+  "description": "Report Playwright runs to localci: steps, artifacts and agent-ready failure reports.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nesolva/localci.git",
+    "directory": "packages/playwright"
+  },
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=20" },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": { "localci-playwright": "./dist/cli.js" },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./reporter": { "types": "./dist/reporter.d.ts", "default": "./dist/reporter.js" },
+    "./flows": { "types": "./dist/flows.d.ts", "default": "./dist/flows.js" },
+    "./coverage": { "types": "./dist/coverage.d.ts", "default": "./dist/coverage.js" },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p . && node -e \"require('fs').chmodSync('dist/cli.js', 0o755)\"",
+    "test": "tsc -p . && node --test --test-concurrency=1 \"test/*.test.mjs\"",
+    "sample:record": "tsc -p . && node scripts/record-sample.mjs",
+    "prepack": "tsc -p ."
+  },
+  "peerDependencies": { "@playwright/test": ">=1.49" },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "^20.0.0",
+    "ajv": "^8.17.0",
+    "typescript": "^5.6.0"
+  }
+}

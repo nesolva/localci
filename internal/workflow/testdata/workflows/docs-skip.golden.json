@@ -1,0 +1,9 @@
+{
+  "checks": [],
+  "skipped": [
+    {
+      "workflow": "build",
+      "reason": "all 2 changed files match paths-ignore"
+    }
+  ]
+}

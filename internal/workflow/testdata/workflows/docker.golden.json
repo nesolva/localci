@@ -1,0 +1,24 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "images",
+      "job": "image",
+      "name": "image",
+      "steps": [
+        {
+          "name": "Run docker build -t acme/app:ci \\",
+          "run": "docker build -t acme/app:ci \\\n  --tag acme/app:latest .\ndocker run --rm -e MODE=test -v \"$PWD:/src\" acme/app:ci make test\ndocker run -p 8080:80 nginx:1.27\ndocker build -t \"acme/${NAME}\" .\n"
+        }
+      ],
+      "dockerTags": [
+        "acme/app:ci",
+        "acme/app:latest",
+        "nginx:1.27"
+      ],
+      "key": "cc1af33b51e9ec5e",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}

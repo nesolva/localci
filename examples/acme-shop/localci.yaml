@@ -1,0 +1,28 @@
+# Suite for the sample shop. Save it as ~/.config/localci/config.yaml (or merge it into yours).
+# `repos` is the repository's GitHub name; run localci from a checkout whose `origin` points at it.
+version: 1
+repos:
+  - name: acme/shop
+    checks: false          # this sample has no workflows
+suites:
+  shop:
+    repos: [acme/shop]
+    prepare:
+      - repo: acme/shop
+        run: npm install
+        cache_key: [package.json]
+        keep: [node_modules]
+    database:
+      driver: command      # the sample's "database" is one JSON file, so a clone is a copy
+      template: {seed: "echo '{\"tenants\":{}}' > {{db.url}}"}
+      create: "cp {{template}} {{name}}"
+      drop: "rm -f {{name}}"
+    test:
+      repo: acme/shop
+      run: npx playwright test
+      env:
+        PORT: '{{port "web"}}'
+        DB_PATH: "{{db.url}}"
+        SLOW_MS: "1500"    # every page waits, so the sample is long enough to show sharding
+    shards: 4
+    timeout: 10m

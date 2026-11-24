@@ -1,0 +1,20 @@
+name: integration
+on: pull_request
+jobs:
+  db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready
+      cache: redis:7
+    env:
+      DATABASE_URL: postgres://postgres:test@localhost:5432/postgres
+    steps:
+      - run: ./scripts/migrate.sh
+      - run: ./scripts/test-integration.sh

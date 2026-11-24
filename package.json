@@ -1,0 +1,5 @@
+{
+  "name": "localci-workspace",
+  "private": true,
+  "workspaces": ["packages/*", "examples/*"]
+}

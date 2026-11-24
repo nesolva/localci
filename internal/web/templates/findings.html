@@ -1,0 +1,32 @@
+{{define "body"}}
+<section class="page narrow">
+{{if .Nights}}
+  <h1 class="title">Findings</h1>
+  <p class="muted">{{.Total}} from exploring the app, newest night first. They never block a merge.</p>
+  {{range .Nights}}
+  <h2 class="sub night-head">{{.When}} <a class="muted" href="/runs/{{.Run}}">run {{short .Run}}</a></h2>
+  <ul class="rows findings{{if not .Latest}} past{{end}}">
+  {{range .Findings}}
+    <li class="finding"><details{{if .Open}} open{{end}}>
+      <summary class="row">
+        <span class="sev sev-{{.Severity}}">{{.Severity}}</span>
+        <span class="grow"><b>{{.Title}}</b>{{if .Goal}}<span class="msg">{{.Goal}}</span>{{end}}</span>
+      </summary>
+      <div class="finding-body">
+        {{if .Steps}}<ol class="steps">{{range .Steps}}<li>{{.}}</li>{{end}}</ol>{{end}}
+        {{if .Screenshot}}<img class="shot" loading="lazy" src="/findings/{{.ID}}/screenshot" alt="The page where the agent found this">{{end}}
+        {{if .Draft}}<p class="muted small">Draft test: <span class="mono">{{.Draft}}</span>, saved with the run. Review it before it goes into your suite.</p>{{end}}
+      </div>
+    </details></li>
+  {{end}}
+  </ul>
+  {{end}}
+{{else}}
+  <div class="idle">
+    <h1 class="title">No findings yet</h1>
+    <p class="muted">An agent explores your app against the goals under <span class="mono">explore</span> in your config, on its own shard, and reports here what it finds.</p>
+    <p>Start a first night now: <span class="mono">localci explore</span></p>
+  </div>
+{{end}}
+</section>
+{{end}}

@@ -1,0 +1,43 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "integration",
+      "job": "db",
+      "name": "db",
+      "steps": [
+        {
+          "name": "Run ./scripts/migrate.sh",
+          "run": "./scripts/migrate.sh"
+        },
+        {
+          "name": "Run ./scripts/test-integration.sh",
+          "run": "./scripts/test-integration.sh"
+        }
+      ],
+      "services": [
+        {
+          "name": "postgres",
+          "image": "postgres:16",
+          "env": {
+            "POSTGRES_PASSWORD": "test"
+          },
+          "ports": [
+            "5432:5432"
+          ],
+          "options": "--health-cmd pg_isready"
+        },
+        {
+          "name": "cache",
+          "image": "redis:7"
+        }
+      ],
+      "env": {
+        "DATABASE_URL": "postgres://postgres:test@localhost:5432/postgres"
+      },
+      "key": "b3d0fc431394f9b5",
+      "timeout": "15m0s"
+    }
+  ],
+  "skipped": []
+}

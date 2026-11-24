@@ -1,0 +1,1 @@
+{"type":"run","id":"42","suite":"e2e","kind":"suite","state":"failed","heads":[{"repo":"acme/web","sha":"a1b2c3d4e5f6","dir":"/work/web","dirty":true}],"created":1000,"started":1000,"finished":313000,"tests":128,"passed":126,"failed":2,"shards":4}

@@ -1,0 +1,15 @@
+product-bug · checkout › pays with saved card · tests/cart.spec.ts:41
+  assertion failed: expected "Thank you", got "Something went wrong"
+  network: POST /api/payments answered 500
+  console: TypeError: card is undefined (app.js:210)
+test-bug · cart › removes a line · tests/cart.spec.ts:77
+  locator getByRole('button', { name: 'Remove' }) matches nothing
+  the page has button "Delete" (edit distance 3)
+  fix: replace "Remove" with "Delete" in tests/cart.spec.ts (localci triage 42 --apply)
+flaky · catalog › filters by tag · tests/catalog.spec.ts:12 · failed on the way, passed in the end: the run is green
+  failed 1, passed 1 of 2 attempts on the same tree
+infrastructure · auth › signs in · tests/auth.spec.ts:9
+  connection refused to the stack: ERR_CONNECTION_REFUSED
+  the stack or the test command ended before the test finished
+unknown · settings › saves · tests/settings.spec.ts:30
+  no 5xx, console error or near match on the page

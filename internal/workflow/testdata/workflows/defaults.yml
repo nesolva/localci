@@ -1,0 +1,23 @@
+name: web
+on: pull_request
+env:
+  LEVEL: workflow
+  KEEP: workflow
+defaults:
+  run:
+    shell: bash
+    working-directory: web
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      LEVEL: job
+    defaults:
+      run:
+        working-directory: web/app
+    steps:
+      - run: npm ci
+      - run: npm run build
+        working-directory: web/other
+        env:
+          LEVEL: ${{ env.LEVEL }}-step

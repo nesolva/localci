@@ -1,0 +1,19 @@
+name: ci
+on: pull_request
+jobs:
+  short:
+    runs-on: ubuntu-latest
+    container: golang:1.24
+    steps:
+      - run: go version
+  long:
+    runs-on: ubuntu-latest
+    container:
+      image: node:20-alpine
+      env:
+        NODE_ENV: test
+      options: --cpus 2
+      volumes:
+        - /tmp/cache:/cache
+    steps:
+      - run: node --version

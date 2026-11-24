@@ -1,0 +1,19 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "both",
+      "job": "check",
+      "name": "check",
+      "steps": [
+        {
+          "name": "Run make check",
+          "run": "make check"
+        }
+      ],
+      "key": "e6d8fcd2a1131f2a",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}

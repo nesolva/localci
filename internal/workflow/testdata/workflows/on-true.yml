@@ -1,0 +1,9 @@
+name: legacy
+true:
+  pull_request:
+    branches: [main]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make check

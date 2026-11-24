@@ -1,0 +1,13 @@
+name: glob
+on:
+  pull_request:
+    paths:
+      - '**.go'
+      - 'web/**.ts'
+      - '*.md'
+      - '!web/gen/**'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make build

@@ -1,0 +1,153 @@
+package workflow
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+const keyWorkflow = `name: ci
+on: pull_request
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make test
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make lint
+`
+
+func planOne(t *testing.T, repo, yml string) map[string]Check {
+	t.Helper()
+	res := PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: repo, Branch: "main"},
+		map[string][]byte{".github/workflows/ci.yml": []byte(yml)})
+	out := map[string]Check{}
+	for _, c := range res.Checks {
+		out[c.Job] = c
+	}
+	return out
+}
+
+func TestKey(t *testing.T) {
+	a := planOne(t, "acme/app", keyWorkflow)
+	b := planOne(t, "acme/fork", keyWorkflow) // another checkout of the same definition
+	if a["test"].Key == "" || a["test"].Key != b["test"].Key {
+		t.Errorf("same definition must give the same key: %q vs %q", a["test"].Key, b["test"].Key)
+	}
+	if a["test"].Key == a["lint"].Key {
+		t.Error("different jobs must not share a key")
+	}
+
+	c := planOne(t, "acme/app", strings.Replace(keyWorkflow, "make test", "make test-all", 1))
+	if c["test"].Key == a["test"].Key {
+		t.Error("a changed step must change the key")
+	}
+	if c["lint"].Key != a["lint"].Key {
+		t.Error("changing one job must not change another job's key")
+	}
+}
+
+func TestConditions(t *testing.T) {
+	sc := &scope{event: Event{Name: "pull_request", Branch: "main"}, matrix: map[string]string{"os": "Linux"}}
+	for _, tc := range []struct {
+		expr          string
+		run, always   bool
+		wantErrSubstr string
+	}{
+		{expr: "github.event_name == 'pull_request'", run: true},
+		{expr: "github.event_name == 'PULL_REQUEST'", run: true}, // GitHub compares case-insensitively
+		{expr: "github.event_name != 'pull_request'", run: false},
+		{expr: "failure()", run: false},
+		{expr: "always()", run: true, always: true},
+		{expr: "cancelled() || always()", run: true, always: true},
+		{expr: "success() && github.event_name == 'push'", run: false},
+		{expr: "!(github.event_name == 'push') && matrix.os == 'linux'", run: true},
+		{expr: "github.event_name == 'push' || github.event_name == 'pull_request'", run: true},
+		{expr: "${{ always() }}", run: true, always: true},
+		{expr: "github.ref == 'refs/heads/main'", wantErrSubstr: "github.ref"},
+		{expr: "contains(github.event_name, 'pull')", wantErrSubstr: "contains"},
+	} {
+		run, always, err := sc.condition(tc.expr)
+		if tc.wantErrSubstr != "" {
+			if err == nil || !strings.Contains(err.Error(), tc.wantErrSubstr) {
+				t.Errorf("%q: want an unsupported error mentioning %q, got %v", tc.expr, tc.wantErrSubstr, err)
+			}
+			continue
+		}
+		if err != nil || run != tc.run || always != tc.always {
+			t.Errorf("%q: got run=%v always=%v err=%v, want run=%v always=%v", tc.expr, run, always, err, tc.run, tc.always)
+		}
+	}
+}
+
+func TestDockerTags(t *testing.T) {
+	got := dockerTags("sudo docker build --tag=acme/a:1 .\ndocker run --rm -p 1:1 -e A=b acme/a:1 test && docker run busybox\ndocker build -t acme/$X .")
+	want := []string{"acme/a:1", "busybox"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// TestPlanFromGit reads workflows from the commit (not the working tree) and
+// takes the changed files from the diff against the base branch.
+func TestPlanFromGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write := func(p, content string) {
+		t.Helper()
+		full := filepath.Join(dir, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("init", "-q", "-b", "main")
+	write(".github/workflows/build.yml", "name: build\non:\n  pull_request:\n    paths-ignore: ['docs/**']\njobs:\n  b:\n    runs-on: x\n    steps:\n      - run: make\n")
+	write("src/a.go", "package a\n")
+	run("add", "-A")
+	run("commit", "-q", "-m", "base")
+	run("checkout", "-q", "-b", "feature")
+	write("docs/readme.md", "docs\n")
+	run("add", "-A")
+	run("commit", "-q", "-m", "docs only")
+	// An uncommitted edit of the workflow must not matter.
+	write(".github/workflows/build.yml", "name: other\non: push\njobs: {}\n")
+
+	res, err := PlanDetailed(dir, "HEAD", Event{Name: "pull_request", Branch: "main", BaseRef: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Checks) != 0 || len(res.Skipped) != 1 || res.Skipped[0].Workflow != "build" || !strings.Contains(res.Skipped[0].Reason, "paths-ignore") {
+		t.Errorf("docs-only change should skip the build workflow, got %+v", res)
+	}
+
+	write("src/b.go", "package a\n")
+	run("add", "src")
+	run("commit", "-q", "-m", "code")
+	checks, err := Plan(dir, "HEAD", Event{Name: "pull_request", Branch: "main", BaseRef: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(checks) != 1 || checks[0].Job != "b" || checks[0].Repo != filepath.Base(dir) {
+		t.Errorf("a code change should plan the build job, got %+v", checks)
+	}
+
+	if _, err := Plan(dir, "nosuchref", Event{Name: "pull_request"}); err == nil {
+		t.Error("an unknown commit must be an error")
+	}
+}

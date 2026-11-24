@@ -1,0 +1,47 @@
+{{define "body"}}
+<section class="page narrow">
+  <div class="crumb"><a href="/">Overview</a> / <a href="/runs/{{.R.ID}}">{{.R.Suite}} {{short .R.ID}}</a></div>
+  <div class="run-head">
+    <div>
+      <h1 class="title">{{.T.Title}}</h1>
+      <p class="muted mono">{{.T.File}}{{if .T.Line}}:{{.T.Line}}{{end}}</p>
+    </div>
+    <div class="run-state"><span class="pill s-{{if .Failed}}failed{{else}}{{.T.Status}}{{end}}">{{.T.Status}}</span><span class="num dur">{{dur .T.MS}}</span></div>
+  </div>
+
+  {{if .Failed}}
+  <section class="fail">
+    {{if .F.Step}}<div class="muted small">Failed at</div><div class="fail-step">{{.F.Step}}</div>{{end}}
+    {{if .F.HasMatcher}}
+    <div class="diff">
+      <div><span class="small muted">Expected</span><pre>{{.F.Expected}}</pre></div>
+      <div class="bad"><span class="small">Actual</span><pre>{{.F.Actual}}</pre></div>
+    </div>
+    {{else if .F.Message}}<pre class="message">{{.F.Message}}</pre>{{end}}
+    {{if .F.Location}}<div class="muted small mono">{{.F.Location}}</div>{{end}}
+  </section>
+
+  {{if or .Class .Evidence}}
+  <section class="block"><h2 class="sub">Triage</h2>
+    {{if .Class}}<p><span class="tag">{{.Class}}</span></p>{{end}}
+    {{if .Evidence}}<pre>{{.Evidence}}</pre>{{end}}
+  </section>
+  {{end}}
+
+  {{if .F.HasMatcher}}{{if .F.Message}}<section class="block"><h2 class="sub">Message</h2><pre class="message">{{.F.Message}}</pre></section>{{end}}{{end}}
+
+  {{if .Shot}}<section class="block"><h2 class="sub">Screenshot</h2><img class="shot" src="/runs/{{.R.ID}}/tests/{{.T.ID}}/screenshot" alt="Screenshot of the page when the test failed"></section>{{end}}
+  {{if .F.Aria}}<section class="block"><h2 class="sub">Page around the target</h2><pre>{{.F.Aria}}</pre></section>{{end}}
+  {{if .F.Console}}<section class="block"><h2 class="sub">Console</h2><pre>{{range .F.Console}}{{.}}
+{{end}}</pre></section>{{end}}
+  {{if .F.Network}}<section class="block"><h2 class="sub">Network</h2>
+    <ul class="rows">{{range .F.Network}}<li class="row quiet mono small"><b>{{.Method}}</b><span class="grow">{{.URL}}</span><span class="{{if or (eq .Status 0) (ge .Status 400)}}bad-text{{end}}">{{if .Status}}{{.Status}}{{else}}no response{{end}}</span></li>{{end}}</ul></section>{{end}}
+  {{if .TraceCmd}}<section class="block"><h2 class="sub">Trace</h2>
+    <div class="cmd"><code>{{.TraceCmd}}</code><button type="button" data-copy="{{.TraceCmd}}">Copy</button></div>
+    <p class="muted small mono">{{.F.Trace}}</p></section>{{end}}
+  {{end}}
+
+  {{if .Steps}}<section class="block"><h2 class="sub">Steps</h2>{{template "attempts" .Attempt}}
+    <ul class="rows">{{range .Steps}}<li class="row quiet{{if .Depth}} d{{.Depth}}{{end}}"><i class="swatch {{.Class}}"></i><span class="grow">{{.Title}}</span><span class="muted num">{{.MS}}</span></li>{{end}}</ul></section>{{end}}
+</section>
+{{end}}

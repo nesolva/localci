@@ -1,0 +1,4 @@
+localci off | sfimage=moon.zzz
+---
+localci is not running
+Start it: localci serve, or localci service install | color=gray

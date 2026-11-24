@@ -1,0 +1,59 @@
+{
+  "checks": [
+    {
+      "repo": "acme/app",
+      "workflow": "third-party",
+      "job": "scan",
+      "name": "scan",
+      "steps": [
+        {
+          "name": "Run aquasecurity/trivy-action@0.28.0",
+          "uses": "aquasecurity/trivy-action@0.28.0",
+          "with": {
+            "scan-type": "fs"
+          }
+        },
+        {
+          "name": "Run echo done",
+          "run": "echo done"
+        }
+      ],
+      "needsActions": true,
+      "key": "fe502e669ba2cd3a",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "third-party",
+      "job": "other-repo",
+      "name": "other-repo",
+      "steps": [
+        {
+          "name": "Run actions/checkout@v4",
+          "uses": "actions/checkout@v4",
+          "with": {
+            "repository": "acme/shared"
+          }
+        },
+        {
+          "name": "Run ls",
+          "run": "ls"
+        }
+      ],
+      "needsActions": true,
+      "key": "cb52756a9a7d0583",
+      "timeout": "6h0m0s"
+    },
+    {
+      "repo": "acme/app",
+      "workflow": "third-party",
+      "job": "reuse",
+      "name": "reuse",
+      "needsActions": true,
+      "unsupported": "reusable workflow acme/shared/.github/workflows/lint.yml@main is not supported",
+      "key": "9b0dfd91bf3d8d24",
+      "timeout": "6h0m0s"
+    }
+  ],
+  "skipped": []
+}

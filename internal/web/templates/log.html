@@ -1,0 +1,15 @@
+{{define "body"}}
+<section class="page narrow">
+  <div class="crumb"><a href="/">Overview</a> / <a href="/runs/{{.R.ID}}">{{.R.Suite}} {{short .R.ID}}</a></div>
+  <h1 class="title">Log</h1>
+  {{if gt (len .Shards) 1}}<div class="tabs">{{range .Shards}}<a role="tab" aria-selected="{{if eq .N $.Shard}}true{{else}}false{{end}}" href="/runs/{{$.R.ID}}/log?shard={{.N}}">Shard {{.N}}</a>{{end}}</div>{{end}}
+  {{if .Missing}}<p class="muted">No log has been written for this run yet.</p>
+  {{else}}
+    {{if .Failing}}<h2 class="sub">Failing lines</h2><pre class="log hot">{{range .Failing}}{{.}}
+{{end}}</pre>{{end}}
+    <h2 class="sub">{{if .Cut}}Last {{len .Tail}} lines{{else}}Full log{{end}}{{if .Live}} · following{{end}}</h2>
+    <pre class="log" data-follow-end>{{range .Tail}}{{.}}
+{{end}}</pre>
+  {{end}}
+</section>
+{{end}}

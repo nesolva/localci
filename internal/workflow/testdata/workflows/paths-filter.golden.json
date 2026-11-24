@@ -1,0 +1,9 @@
+{
+  "checks": [],
+  "skipped": [
+    {
+      "workflow": "backend",
+      "reason": "no changed file matches paths (2 changed)"
+    }
+  ]
+}
