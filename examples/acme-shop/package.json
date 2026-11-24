@@ -4,5 +4,5 @@
   "private": true,
   "description": "Example app and Playwright suite for localci.",
   "scripts": { "start": "node server.js", "test": "playwright test" },
-  "devDependencies": { "@playwright/test": "1.64.0", "@nesolva/localci-playwright": "*" }
+  "devDependencies": { "@playwright/test": "1.65.1", "@nesolva/localci-playwright": "*" }
 }
