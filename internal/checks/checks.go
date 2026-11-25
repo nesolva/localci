@@ -102,6 +102,7 @@ type Runner struct {
 	wg      sync.WaitGroup
 	mu      sync.Mutex
 	active  map[string]*job // by run id, and by repo, PR and check
+	batch   map[*job]string // the Submit that created each active job
 	ctxOnce sync.Once
 	baseCtx context.Context
 }
@@ -125,6 +126,11 @@ type Request struct {
 	// merge ref is still not ready, Submit posts an error status on the head
 	// instead of leaving the pull request without checks in silence.
 	LastAttempt bool
+	// Only, when set, starts just the check with this status context
+	// (`localci/<workflow>/<name>`). Every check is still planned and named
+	// first, so a suffixed name is found. A request for a context no check
+	// has starts nothing.
+	Only string
 }
 
 // Started is one check Submit began.
@@ -175,7 +181,7 @@ func (r *Runner) Submit(ctx context.Context, req Request) (Submission, error) {
 		}
 		return Submission{}, err
 	}
-	if req.PR > 0 && r.Options.MergeRef && r.Forge != nil {
+	if req.PR > 0 && r.Options.MergeRef && r.Forge != nil && req.Only == "" {
 		// Clears a "merge ref not ready" error an earlier attempt may have left
 		// on this head (one status per submit; no memory to lose on restart).
 		// Best effort: a missing status must not keep the checks from running.
@@ -199,10 +205,21 @@ func (r *Runner) Submit(ctx context.Context, req Request) (Submission, error) {
 	}
 
 	sub := Submission{Skipped: plan.Skipped}
+	var runnable []workflow.Check
 	for _, c := range plan.Checks {
 		if c.NeedsActions && r.Act == nil {
 			sub.Skipped = append(sub.Skipped, workflow.Skip{Workflow: c.Workflow, Job: c.Name,
 				Reason: "needs third-party actions and `act` is not set up"})
+			continue
+		}
+		runnable = append(runnable, c)
+	}
+	// Every name is final before the first status is created: two checks that
+	// shared a context would overwrite each other's status on the commit.
+	runnable = uniqueNames(runnable)
+	batch := newID()
+	for _, c := range runnable {
+		if req.Only != "" && forge.Context(workflowLabel(c.Workflow)+"/"+c.Name) != req.Only {
 			continue
 		}
 		j := &job{r: r, req: req, check: c, mirror: m, sha: sha, tree: tree, id: newID(), done: make(chan struct{})}
@@ -211,9 +228,41 @@ func (r *Runner) Submit(ctx context.Context, req Request) (Submission, error) {
 			return sub, err
 		}
 		sub.Runs = append(sub.Runs, Started{RunID: j.id, Workflow: c.Workflow, Name: c.Name, Context: forge.Context(j.name), Done: j.done})
-		r.start(j)
+		r.start(j, batch)
 	}
 	return sub, nil
+}
+
+// uniqueNames gives every check of cs its own status context
+// (`localci/<workflow>/<name>`, across workflows). A check whose context is
+// shared with another gets GitHub's cell suffix (`test linux (linux, 18)`);
+// names that are unique keep their name, so contexts of existing setups do not
+// change. Cells that still collide are numbered: `(linux, 18 #2)`.
+func uniqueNames(cs []workflow.Check) []workflow.Check {
+	ctxOf := func(c workflow.Check) string { return workflowLabel(c.Workflow) + "/" + c.Name }
+	count := map[string]int{}
+	for _, c := range cs {
+		count[ctxOf(c)]++
+	}
+	out := slices.Clone(cs)
+	for i, c := range out {
+		if count[ctxOf(c)] > 1 {
+			out[i].Name += c.Cell
+		}
+	}
+	seen := map[string]int{}
+	for i, c := range out {
+		k := ctxOf(c)
+		seen[k]++
+		if n := seen[k]; n > 1 {
+			if base, ok := strings.CutSuffix(c.Name, ")"); ok {
+				out[i].Name = fmt.Sprintf("%s #%d)", base, n)
+			} else {
+				out[i].Name = fmt.Sprintf("%s (#%d)", c.Name, n)
+			}
+		}
+	}
+	return out
 }
 
 // plan is workflow.PlanDetailed without the workflow files the repo skips
@@ -380,7 +429,7 @@ func short(sha string) string {
 	return sha
 }
 
-func (r *Runner) start(j *job) {
+func (r *Runner) start(j *job, batch string) {
 	r.ctxOnce.Do(func() {
 		r.baseCtx = r.Context
 		if r.baseCtx == nil {
@@ -392,7 +441,9 @@ func (r *Runner) start(j *job) {
 	r.mu.Lock()
 	if r.active == nil {
 		r.active = map[string]*job{}
+		r.batch = map[*job]string{}
 	}
+	r.batch[j] = batch
 	if j.req.PR > 0 {
 		j.key = fmt.Sprintf("%s#%d %s", j.req.Repo, j.req.PR, j.name)
 		if prev := r.active[j.key]; prev != nil {

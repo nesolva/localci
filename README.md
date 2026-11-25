@@ -87,7 +87,10 @@ skill cover the rest.
 - **Triage.** A failed test is rerun to rule out flakiness, then called a product bug, a test bug, flaky or
   infrastructure, with the evidence. A broken selector becomes a patch you review, never a silent change.
 - **Pull-request checks.** The jobs in `.github/workflows` run on your machine with caches warm, using the merge
-  result, `paths` filters, matrices and `services:`, and post commit statuses back.
+  result, `paths` filters, matrices and `services:`, and post commit statuses back. Every check posts its own status,
+  `localci/<workflow>/<job>`. When two matrix cells have the same name, each gets GitHub's cell suffix, as in
+  `localci/CI/test linux (linux, 18)`, so a failing cell is never hidden by a passing one. Retrying a check reruns that
+  check only.
   A job with `services:` runs in a container that shares its services' network, so `localhost:<port>` and the
   service name both work, as on GitHub's runners; nothing is published on your machine, so your own Postgres on 5432
   is left alone. A `ports:` remap like `5433:5432` is not applied (the job log says which port to use). A step
