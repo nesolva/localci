@@ -254,3 +254,68 @@ func TestReposRunChecksUnlessTurnedOff(t *testing.T) {
 		t.Errorf("checks must default to true and honour false: %+v", e.Repos)
 	}
 }
+
+func writeConfig(t *testing.T, body string) Options {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return Options{Path: p, Machine: testMachine, Env: func(string) string { return "" }}
+}
+
+func TestRepoPathIsExpandedAndResolved(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	real := filepath.Join(home, "code", "local")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(home, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	want, _ := filepath.EvalSymlinks(real)
+
+	for _, p := range []string{"~/code/local", link} {
+		e := load(t, writeConfig(t, "repos:\n  - name: acme/local\n    path: "+p+"\n    checks: false\n"))
+		if len(e.Repos) != 1 || e.Repos[0].Path != want || e.Repos[0].Checks {
+			t.Errorf("path %q: repos = %+v, want path %s", p, e.Repos, want)
+		}
+	}
+	// An entry without a path stays as it was.
+	e := load(t, writeConfig(t, "repos:\n  - name: acme/api\n"))
+	if e.Repos[0].Path != "" || !e.Repos[0].Checks {
+		t.Errorf("repos = %+v", e.Repos)
+	}
+}
+
+func TestRepoPathMustBeAnExistingDirectoryAndUnique(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file")
+	os.WriteFile(file, nil, 0o644)
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(dir, alias); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct{ yaml, want string }{
+		"missing": {"repos:\n  - name: acme/local\n    path: " + filepath.Join(dir, "nope") + "\n",
+			"config.yaml:3: repos[0].path: acme/local: "},
+		"a file":   {"repos:\n  - name: acme/local\n    path: " + file + "\n", "repos[0].path: acme/local: " + file + " is not a directory"},
+		"relative": {"repos:\n  - name: acme/local\n    path: code/local\n", "repos[0].path: acme/local: "},
+		"empty":    {"repos:\n  - name: acme/local\n    path: \"\"\n", "repos[0].path: acme/local: expected the path"},
+		"same directory twice, one through a symlink": {"repos:\n  - name: acme/a\n    path: " + dir + "\n  - name: acme/b\n    path: " + alias + "\n",
+			"repos[1].path: acme/b: "},
+	} {
+		t.Run(name, func(t *testing.T) {
+			o := writeConfig(t, tc.yaml)
+			_, err := Load(o)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v; want it to contain %q", err, tc.want)
+			}
+			if name == "same directory twice, one through a symlink" && !strings.Contains(err.Error(), "already the checkout of acme/a") {
+				t.Fatalf("err = %v; want it to name the other repository", err)
+			}
+		})
+	}
+}

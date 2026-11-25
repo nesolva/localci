@@ -62,7 +62,7 @@ When you are done: stop `localci serve`, `unset LOCALCI_CONFIG`, and remove the 
 2. Wrap the config, `export default withLocalci(defineConfig({...}))`, import `test` and `expect` from
    `@nesolva/localci-playwright`, and make `baseURL` and `webServer` read the port from `process.env.PORT`.
 3. Add a suite to `~/.config/localci/config.yaml`. The [suites page](docs/suites.md) starts from the smallest one; the repository
-   name must equal the owner and name of your checkout's `origin` remote.
+   name must equal the owner and name of your checkout's `origin` remote (no `origin`? map the checkout with `path`).
 4. `localci doctor` lists what the machine lacks. A failing `gh auth` matters only for pull-request checks and
    watching; local runs do not need it.
 5. Start `localci serve` (or `localci service install` to keep it running at login), then `localci run --wait` from

@@ -155,3 +155,21 @@ func private(t *testing.T) string {
 	}
 	return d
 }
+
+func TestEachRepoPathIsReportedAndMustBeTheTopOfAGitCheckout(t *testing.T) {
+	cmds := map[string]string{"git -C /code/ok rev-parse --show-toplevel": "/code/ok", "git -C /code/inner rev-parse --show-toplevel": "/code"}
+	for k, v := range healthy {
+		cmds[k] = v
+	}
+	in := Input{Port: 7357, DataDir: private(t), Repos: 3,
+		Paths: []RepoPath{{"acme/ok", "/code/ok"}, {"acme/inner", "/code/inner"}, {"acme/plain", "/code/plain"}}}
+	rs := Run(context.Background(), in, fakeDeps(cmds, 100*gib, nil))
+	if r := byName(rs, "path acme/ok"); r.Status != OK || !strings.Contains(r.Detail, "/code/ok") {
+		t.Errorf("a checkout: %+v", r)
+	}
+	for _, name := range []string{"path acme/inner", "path acme/plain"} {
+		if r := byName(rs, name); r.Status != Warn || r.Fix == "" {
+			t.Errorf("%s: %+v, want a warning that says what to do", name, r)
+		}
+	}
+}

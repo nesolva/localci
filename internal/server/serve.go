@@ -96,7 +96,7 @@ func Start(ctx context.Context, o Options) error {
 	}
 	hub := NewWorkerHub(0)
 	runner, err := suite.New(suite.Deps{Store: st, Log: elog, Sched: sc, DataDir: o.DataDir, Suites: suites, API: base,
-		Remote: hub, RemoteForks: cfg.Workers.Forks})
+		Remote: hub, RemoteForks: cfg.Workers.Forks, RepoURL: localRepoURL(cfg.Repos)})
 	if err != nil {
 		l.Close()
 		return err
@@ -299,4 +299,24 @@ type checkAdmitter struct{ s *sched.Scheduler }
 
 func (a checkAdmitter) Admit(ctx context.Context, c checks.Cost) (func(), error) {
 	return a.s.Admit(ctx, sched.Cost{CPUs: int(math.Ceil(c.CPU)), Memory: uint64(max(c.Mem, 0))})
+}
+
+// localRepoURL says where suites clone a repository from: the checkout it is mapped to by `repos[].path`, else
+// the default (its GitHub address, nil here). A repository that lives only on this machine has no other source.
+func localRepoURL(repos []config.Repo) func(string) string {
+	paths := map[string]string{}
+	for _, r := range repos {
+		if r.Path != "" {
+			paths[r.Name] = r.Path
+		}
+	}
+	if len(paths) == 0 {
+		return nil
+	}
+	return func(repo string) string {
+		if p, ok := paths[repo]; ok {
+			return p
+		}
+		return "https://github.com/" + repo + ".git"
+	}
 }

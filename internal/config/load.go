@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -382,6 +383,7 @@ func (l *loader) setRepos(f *Field, n *yaml.Node) {
 	}
 	var repos []Repo
 	seen := map[string]bool{}
+	seenPath := map[string]string{} // resolved path -> repository
 	ok := true
 	for i, item := range n.Content {
 		path := fmt.Sprintf("repos[%d]", i)
@@ -392,6 +394,7 @@ func (l *loader) setRepos(f *Field, n *yaml.Node) {
 		}
 		r := Repo{Checks: true}
 		hasName := false
+		var pathNode *yaml.Node
 		for j := 0; j+1 < len(item.Content); j += 2 {
 			k, v := item.Content[j], item.Content[j+1]
 			switch k.Value {
@@ -419,8 +422,10 @@ func (l *loader) setRepos(f *Field, n *yaml.Node) {
 					break
 				}
 				r.Checks = v.Value == "true"
+			case "path":
+				pathNode = v
 			default:
-				l.unknown(k, path+"."+k.Value, []string{"name", "workflows", "checks"})
+				l.unknown(k, path+"."+k.Value, []string{"name", "workflows", "checks", "path"})
 				ok = false
 			}
 		}
@@ -428,12 +433,59 @@ func (l *loader) setRepos(f *Field, n *yaml.Node) {
 			l.fileErr(item, path, "missing name")
 			ok = false
 		}
+		if pathNode != nil {
+			dir, err := checkoutPath(pathNode)
+			switch {
+			case err != nil:
+				l.fileErr(pathNode, path+".path", "%s: %v", entryLabel(r.Name), err)
+				ok = false
+			case seenPath[dir] != "":
+				l.fileErr(pathNode, path+".path", "%s: %s is already the checkout of %s", entryLabel(r.Name), dir, seenPath[dir])
+				ok = false
+			default:
+				seenPath[dir] = entryLabel(r.Name)
+				r.Path = dir
+			}
+		}
 		repos = append(repos, r)
 	}
 	if ok {
 		l.cfg.Repos = repos
 		l.set(f, SourceFile, false)
 	}
+}
+
+func entryLabel(name string) string {
+	if name == "" {
+		return "repository"
+	}
+	return name
+}
+
+// checkoutPath resolves a `repos[].path`: `~` expanded, symlinks followed, an existing directory.
+func checkoutPath(n *yaml.Node) (string, error) {
+	if n.Kind != yaml.ScalarNode || strings.TrimSpace(n.Value) == "" {
+		return "", errors.New("expected the path of a local checkout")
+	}
+	p := strings.TrimSpace(n.Value)
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("cannot expand ~: %v", err)
+		}
+		p = filepath.Join(home, p[1:])
+	}
+	if !filepath.IsAbs(p) {
+		return "", fmt.Errorf("%q is not an absolute path (use ~/… or /…)", n.Value)
+	}
+	dir, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return "", fmt.Errorf("%s does not exist", p)
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return "", fmt.Errorf("%s is not a directory", p)
+	}
+	return dir, nil
 }
 
 func (l *loader) workflowSkip(n *yaml.Node, path string) ([]string, bool) {

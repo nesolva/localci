@@ -16,6 +16,9 @@ repos:
       skip: [release.yml]
   - name: acme/web
     checks: true      # false: suites only, no workflow checks
+  - name: acme/local  # lives only on this machine, no origin needed
+    path: ~/code/local
+    checks: false     # nothing to poll on GitHub
 watch:
   poll: 60s
   max_age: 24h
@@ -43,7 +46,7 @@ server:
 | Key | Default | Env var | Flag | Description |
 |---|---|---|---|---|
 | `version` | `1` | n/a | n/a | Schema version. Only 1 exists. |
-| `repos` | `(none)` | `LOCALCI_REPOS` | `--repos` | Repositories to watch, as `owner/name` entries; each may set `workflows.skip` (workflow files to ignore) and `checks: false` (watch it for suites only, run none of its workflow checks). Required to run checks. Env and flag take a comma-separated list of names. |
+| `repos` | `(none)` | `LOCALCI_REPOS` | `--repos` | Repositories to watch, as `owner/name` entries; each may set `workflows.skip` (workflow files to ignore) and `checks: false` (watch it for suites only, run none of its workflow checks). `path` maps a repository to its checkout on this machine (`~` allowed, must exist): `localci run` from that directory tests it as this repository whatever `origin` says, so a repository with no `origin` works (suites clone it from that directory, not from GitHub); a repository with `path` and `checks: false` is not polled for pull requests, so set both for one that lives only here. Required to run checks. Env and flag take a comma-separated list of names, which replaces the whole list (so `path` is set in the file only). |
 | `watch.poll` | `60s` | `LOCALCI_WATCH_POLL` | `--watch-poll` | How often to look for new or updated pull requests (at least 10s). |
 | `watch.max_age` | `24h` | `LOCALCI_WATCH_MAX_AGE` | `--watch-max-age` | Pull request heads older than this only run when submitted by hand. |
 | `watch.drafts` | `false` | `LOCALCI_WATCH_DRAFTS` | `--watch-drafts` | Also run checks on draft pull requests. |

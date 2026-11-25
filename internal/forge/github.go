@@ -64,6 +64,11 @@ func OptionsFromConfig(c *config.Config, token string) Options {
 	o := Options{Token: token, Poll: c.Watch.Poll, MaxAge: c.Watch.MaxAge, Drafts: c.Watch.Drafts, Forks: c.Watch.Forks,
 		Labels: suiteLabels(c.Suites)}
 	for _, r := range c.Repos {
+		// A repository mapped to a local checkout with no checks to run is the local-only kind: GitHub has no
+		// pull requests to poll for it.
+		if r.Path != "" && !r.Checks {
+			continue
+		}
 		o.Repos = append(o.Repos, r.Name)
 	}
 	return o

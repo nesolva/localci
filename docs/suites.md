@@ -9,7 +9,7 @@ The smallest useful suite needs a repository and a test command:
 ```yaml
 version: 1
 repos:
-  - name: acme/todo          # must equal the owner/name of the checkout's `origin` remote
+  - name: acme/todo          # the owner/name of the checkout's `origin` remote, or map it with `path`
     checks: false            # no workflow checks, suites only
 suites:
   todo:
@@ -21,6 +21,20 @@ suites:
         PORT: '{{port "web"}}'   # a port of this shard's own; the Playwright config must read it
     shards: auto
 ```
+
+A repository that has no `origin` (or whose `origin` does not name it) is mapped to its checkout with `path`:
+
+```yaml
+repos:
+  - name: acme/todo
+    path: ~/code/todo   # the checkout; `localci run` from it tests it as acme/todo
+    checks: false       # nothing on GitHub to poll
+```
+
+`localci run` finds the repository by the checkout's top-level directory: when it equals a `path`, that entry's `name` is
+the repository, whatever `origin` says. Runs clone the repository from that directory instead of GitHub, so keep it for
+repositories without pull requests on GitHub, and set `checks: false` (a repository with `path` and `checks: false` is
+never polled). `localci doctor` lists each `path` and whether it is a git checkout.
 
 | Key | Meaning |
 |---|---|
