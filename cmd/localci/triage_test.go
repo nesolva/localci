@@ -4,6 +4,7 @@ import (
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode"
@@ -72,6 +73,13 @@ const cartSpec = `import { test } from "./fixtures";
 
 test("removes a line", async ({ page }) => {
   await page.getByRole("button", { name: "Remove" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
+});
+
+test("empties the cart", async ({ page }) => {
+  await page.goto("/cart");
+  await page.getByRole("link", { name: "Cart" }).click();
+  await page.getByRole("button", { name: "Empty" }).click();
 });
 `
 
@@ -130,6 +138,71 @@ func TestTriageApplyChangesTheWorkingTreeOnly(t *testing.T) {
 	}
 	if st := gitStatus(t, repo); st != "M tests/cart.spec.ts" {
 		t.Fatalf("status %q: only the working tree changes", st)
+	}
+}
+
+// addFix gives the run one more failed test, whose patch replaces from with to in the locator on that line of the spec.
+func addFix(t *testing.T, repo string, rep *server.TriageReport, test string, line int, from, to string) {
+	t.Helper()
+	p, why := triage.BuildPatch(repo, filepath.Join(repo, "tests/cart.spec.ts")+":"+strconv.Itoa(line), []string{"cart.spec.ts"},
+		triage.Fix{Method: "getByRole", Role: "button", From: from, To: to})
+	if p == nil {
+		t.Fatal(why)
+	}
+	file := filepath.Join(t.TempDir(), test+".patch")
+	if err := os.WriteFile(file, []byte(p.Diff), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tt := rep.Tests[0]
+	tt.Test = test
+	tt.Patch = &triage.PatchInfo{Path: file, File: p.File, Shas: rep.Tests[0].Patch.Shas, From: from, To: to}
+	rep.Tests = append(rep.Tests, tt)
+}
+
+// One spec run under two projects, or a broken locator in a shared beforeEach, gives two failed tests the same
+// patch: it is applied once, and the command succeeds.
+func TestTriageApplyAppliesAPatchTwoTestsShareOnce(t *testing.T) {
+	repo, rep := patched(t, false, "patch")
+	addFix(t, repo, &rep, "t2-firefox", 4, "Remove", "Delete")
+	t.Chdir(repo)
+	out, errOut, code := cli(t, fake(t, map[string]any{"GET /api/runs/42/triage": rep}), "triage", "42", "--apply")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if n := strings.Count(out, `applied: "Remove" → "Delete" in tests/cart.spec.ts`); n != 1 {
+		t.Fatalf("the shared fix is reported %d times:\n%s", n, out)
+	}
+	got, _ := os.ReadFile(filepath.Join(repo, "tests/cart.spec.ts"))
+	if !strings.Contains(string(got), `name: "Delete"`) {
+		t.Fatalf("file:\n%s", got)
+	}
+}
+
+// Fixes are applied all together or not at all: two that change neighbouring lines do not fit one after the other,
+// and the working tree must not keep the first one alone.
+func TestTriageApplyIsAllOrNothing(t *testing.T) {
+	repo, rep := patched(t, false, "patch")
+	addFix(t, repo, &rep, "t6", 5, "Save", "Store")
+	t.Chdir(repo)
+	_, errOut, code := cli(t, fake(t, map[string]any{"GET /api/runs/42/triage": rep}), "triage", "42", "--apply")
+	if code != 1 || !strings.HasPrefix(errOut, "localci: not applied:") {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if st := gitStatus(t, repo); st != "" {
+		t.Fatalf("status %q: a refused set of fixes left the working tree half-patched", st)
+	}
+
+	// Fixes apart from each other all apply.
+	repo, rep = patched(t, false, "patch")
+	addFix(t, repo, &rep, "t8", 11, "Empty", "Clear")
+	t.Chdir(repo)
+	out, errOut, code := cli(t, fake(t, map[string]any{"GET /api/runs/42/triage": rep}), "triage", "42", "--apply")
+	if code != 0 || strings.Count(out, "applied: ") != 2 {
+		t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+	}
+	got, _ := os.ReadFile(filepath.Join(repo, "tests/cart.spec.ts"))
+	if !strings.Contains(string(got), `name: "Delete"`) || !strings.Contains(string(got), `name: "Clear"`) {
+		t.Fatalf("file:\n%s", got)
 	}
 }
 
