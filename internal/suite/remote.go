@@ -185,10 +185,11 @@ func (ex *execution) runRemoteShard(n int, ids []shard.TestID) error {
 	return runErr
 }
 
-// runRequeued runs tests no worker could finish on this machine, against the local capacity like any local shard.
+// runRequeued runs tests no worker could finish on this machine, inside the run's own admitted grant: it waits for
+// one of the run's slots, like a local shard, and never asks the scheduler again (the run holds a grant that may
+// already fill the machine, so a second admission would wait for the run itself).
 func (ex *execution) runRequeued(n int, ids []shard.TestID, gen int) (cost sched.Cost, cpu float64, failed bool, err error) {
-	per := ex.shardCost()
-	release, err := ex.r.d.Sched.Admit(ex.ctx, sched.Cost{CPUs: per.CPUs, Memory: per.Memory})
+	release, err := ex.takeSlot()
 	if err != nil {
 		return cost, cpu, true, err
 	}

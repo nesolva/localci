@@ -35,6 +35,16 @@ suites:
 | `timeout` | Longest a run may take, such as `10m`. |
 | `exclusive` | `true` stops other work while the suite runs. |
 
+## The environment of a run
+
+A run gets the server's environment: that of the `localci serve` process (the service's, when it was installed with
+`localci service install`), not the environment of the shell that ran `localci run`. A service starts with what its
+manager gives it, which is not your interactive shell's. The result is the same whether you start a run from the CLI,
+from a pull request or from the dashboard, and a variable you `export` before `localci run` does not reach the tests.
+
+To give the tests a value, put it in the suite's `env:` under `test` (as in the example above); a `stack` entry has its
+own `env` for the processes it starts. Run options will be another way once they ship.
+
 ## Templates
 
 Inside `env`, `run`, `ready` and database commands:

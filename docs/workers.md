@@ -55,6 +55,8 @@ means a new name and a new token.
 - Shard 0 (the serial group, reruns, flake probes), exploratory runs and test checkpoints that need the database always
   stay on the primary.
 - A worker that goes silent loses its shards. The tests it had not reported run again, on another worker or on the
-  primary, and the run still finishes.
+  primary, and the run still finishes. Back on the primary they use the share of the machine the run already holds
+  (one slot per shard that runs there), so they wait for a free slot of their own run, never in the queue behind other
+  work, and a run that filled the machine, or an `exclusive` suite, still ends.
 - Tests that ran on a worker add to the memo and timing history but not to coverage or write-set learning for
   affected-tests selection; those keep learning from the shards that run on the primary.
