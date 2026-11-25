@@ -147,6 +147,10 @@ func planJob(repo, wf, id string, n *yaml.Node, base *scope, wfEnv map[string]st
 	_, j := mapPairs(n)
 
 	if u := scalar(j["uses"]); u != "" {
+		sc := &scope{event: base.event, sha: base.sha, env: wfEnv, needs: d.results}
+		if r := skipReason(scalar(j["if"]), sc, d); r != "" {
+			return nil, []Skip{{Workflow: wf, Job: id, Reason: r}}
+		}
 		return []Check{finish(Check{Repo: repo, Workflow: wf, Job: id, Name: id, NeedsActions: true, Timeout: defaultTimeout,
 			Unsupported: "reusable workflow " + u + " is not supported"})}, nil
 	}
@@ -183,26 +187,9 @@ func planJob(repo, wf, id string, n *yaml.Node, base *scope, wfEnv map[string]st
 			name += cb.suffix()
 		}
 
-		// Without a status function GitHub adds success() to a job's if:,
-		// which is false once a job it needs is skipped.
-		cond := scalar(j["if"])
-		if len(d.skipped) > 0 && !usesStatus(cond) {
-			skips = append(skips, Skip{Workflow: wf, Job: name, Reason: "needs " + d.skipped[0] + ", which is skipped"})
+		if r := skipReason(scalar(j["if"]), sc, d); r != "" {
+			skips = append(skips, Skip{Workflow: wf, Job: name, Reason: r})
 			continue
-		}
-		if cond != "" {
-			jsc := *sc
-			jsc.needSkipped = len(d.skipped) > 0
-			run, _, err := jsc.condition(cond)
-			if err != nil {
-				// A job GitHub may not run (a deploy behind a secret or a
-				// variable) is not run here either.
-				skips = append(skips, Skip{Workflow: wf, Job: name, Reason: "if: " + cond + " cannot be decided before the job runs (" + err.Error() + ")"})
-				continue
-			} else if !run {
-				skips = append(skips, Skip{Workflow: wf, Job: name, Reason: "if: " + cond + " is false"})
-				continue
-			}
 		}
 
 		jobEnv := resolveEnv(j["env"], sc, &bad)
@@ -248,6 +235,31 @@ func planJob(repo, wf, id string, n *yaml.Node, base *scope, wfEnv map[string]st
 		checks = append(checks, finish(c))
 	}
 	return checks, skips
+}
+
+// skipReason says why GitHub would not run a job with this if: and these
+// needs, or "" when it would.
+func skipReason(cond string, sc *scope, d deps) string {
+	// Without a status function GitHub adds success() to a job's if:, which
+	// is false once a job it needs is skipped.
+	if len(d.skipped) > 0 && !usesStatus(cond) {
+		return "needs " + d.skipped[0] + ", which is skipped"
+	}
+	if cond == "" {
+		return ""
+	}
+	jsc := *sc
+	jsc.needSkipped = len(d.skipped) > 0
+	run, _, err := jsc.condition(cond)
+	switch {
+	case err != nil:
+		// A job GitHub may not run (a deploy behind a secret or a variable)
+		// is not run here either.
+		return "if: " + cond + " cannot be decided before the job runs (" + err.Error() + ")"
+	case !run:
+		return "if: " + cond + " is false"
+	}
+	return ""
 }
 
 func planStep(c *Check, n *yaml.Node, sc *scope, shell, dir string, bad *[]string) {

@@ -201,3 +201,30 @@ jobs:
 		t.Errorf("skips = %+v, want deploy (naming vars.DEPLOY_ENABLED) and notify (needs deploy)", res.Skipped)
 	}
 }
+
+// A job that calls a reusable workflow is skipped like any other job when
+// GitHub would skip it; only a job that would run is reported unsupported.
+func TestReusableWorkflowJobFollowsItsConditions(t *testing.T) {
+	wf := `on: pull_request
+jobs:
+  release:
+    if: github.event_name == 'push'
+    uses: acme/shared/.github/workflows/release.yml@main
+  e2e:
+    if: contains(github.event.pull_request.labels.*.name, 'e2e')
+    uses: acme/shared/.github/workflows/e2e.yml@main
+  docs:
+    needs: release
+    uses: acme/shared/.github/workflows/docs.yml@main
+  lint:
+    uses: acme/shared/.github/workflows/lint.yml@main
+`
+	res := PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: "acme/app", Branch: "main"},
+		map[string][]byte{".github/workflows/ci.yml": []byte(wf)})
+	if len(res.Checks) != 1 || res.Checks[0].Job != "lint" || !strings.Contains(res.Checks[0].Unsupported, "reusable workflow") {
+		t.Errorf("planned %+v, want only lint, reported unsupported", res.Checks)
+	}
+	if len(res.Skipped) != 3 {
+		t.Errorf("skipped %+v, want release, e2e and docs", res.Skipped)
+	}
+}
