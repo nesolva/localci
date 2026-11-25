@@ -69,7 +69,7 @@ When you are done: stop `localci serve` and remove the redirect with
    inside the repository. It tests your working tree, uncommitted tracked changes included; keep `node_modules` in
    `.gitignore`.
 
-[`examples/`](examples) has a Postgres stack, a suite across two repositories and pull-request checks, and
+[`examples/`](examples) has a Postgres stack, a pytest suite for an HTTP API, a suite across two repositories and pull-request checks, and
 [the configuration reference](docs/config.md) lists every setting. For an agent, [the agent guide](docs/agents.md) and the
 skill cover the rest.
 

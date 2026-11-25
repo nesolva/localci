@@ -1,0 +1,39 @@
+# Suite for a small HTTP API: the service under test and its mocked payments backend run as a stack, and pytest
+# talks to the service. Save it as ~/.config/localci/config.yaml (or merge it into yours).
+# `repos` is the repository's GitHub name; run localci from a checkout whose `origin` points at it.
+version: 1
+repos:
+  - name: acme/orders
+    checks: false          # this sample has no workflows
+suites:
+  pytest-api:
+    repos: [acme/orders]
+    prepare:
+      - repo: acme/orders
+        run: python3 -m venv .venv && .venv/bin/pip install -q -r requirements.txt
+        cache_key: [requirements.txt]
+        keep: [.venv]
+    stack:
+      - name: payments
+        repo: acme/orders
+        run: .venv/bin/python -m fakes.payments
+        env:
+          PORT: '{{port "payments"}}'
+        ready: {http: 'http://127.0.0.1:{{port "payments"}}/healthz', timeout: 30s}
+      - name: orders
+        repo: acme/orders
+        run: .venv/bin/python -m orders.service
+        env:
+          PORT: '{{port "orders"}}'
+          PAYMENTS_URL: 'http://127.0.0.1:{{port "payments"}}'
+          LATENCY_MS: "700"   # every request waits, so the sample is long enough to show sharding
+        ready: {http: 'http://127.0.0.1:{{port "orders"}}/healthz', timeout: 30s}
+    test:
+      repo: acme/orders
+      run: .venv/bin/python -m pytest -p localci_pytest
+      list: .venv/bin/python -m localci_pytest list
+      env:
+        ORDERS_URL: 'http://127.0.0.1:{{port "orders"}}'
+        PAYMENTS_URL: 'http://127.0.0.1:{{port "payments"}}'
+    shards: 2
+    timeout: 10m

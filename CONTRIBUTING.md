@@ -20,6 +20,7 @@ npx playwright install chromium         # only for the example suite and the Pla
 ```bash
 make ci-go                              # gofmt, generated docs up to date, vet, staticcheck, race tests, govulncheck
 make ci-playwright                      # builds and tests the Playwright package
+make ci-pytest                          # tests the pytest plugin in a virtualenv (Python 3.9 or newer)
 ```
 
 For a quick loop, `go test ./internal/<package> -run <Name> -count=1` runs one test, and `go vet ./...` plus

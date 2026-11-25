@@ -1,0 +1,2 @@
+pytest>=7
+localci-pytest @ git+https://github.com/nesolva/localci.git#subdirectory=packages/pytest

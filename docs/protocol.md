@@ -1,7 +1,7 @@
 # Report protocol v1
 
 How a test framework package tells localci what happened in a run. The Playwright package
-(`packages/playwright`) speaks it; anything else that can append lines to a file can too. The machine
+(`packages/playwright`) and the pytest plugin (`packages/pytest`) speak it; anything else that can append lines to a file can too. The machine
 readable definition is [`protocol/v1.schema.json`](../protocol/v1.schema.json) (JSON Schema, one event
 per validation).
 
@@ -34,9 +34,10 @@ core's help (a flow just runs).
 ## Test ids
 
 `id = hash(project, file, title path)`: the project name, the test file relative to the Playwright root
-directory (forward slashes) and the describe titles plus the test title. Moving a test within its file
+directory or pytest's rootdir (forward slashes) and the describe titles (pytest: class names) plus the test title. Moving a test within its file
 does not change its id, renaming it or its describe block does. The package prints 16 hex characters;
-localci treats an id as an opaque string.
+localci treats an id as an opaque string. Both packages compute it the same way:
+[`protocol/test-ids.json`](../protocol/test-ids.json) lists inputs and ids, and each package's tests check it.
 
 ## Events
 
@@ -105,6 +106,45 @@ when `$LOCALCI_TESTS` is set, runs only those ids. `test` is `@playwright/test`'
 fixture that records console errors and failed requests, calls the test hooks on `$LOCALCI_API` and, on
 failure, captures the aria excerpt. `npx --no-install --offline localci-playwright list` prints the suite as NDJSON
 `{test,file,title,line}`.
+
+## pytest plugin
+
+`localci-pytest` (`packages/pytest`; Python 3.9 or newer, pytest 7 or newer, no other dependency) makes a pytest suite
+report like a Playwright one: sharded, filtered by `$LOCALCI_TESTS`, with its tests, steps and failures on the timeline.
+It is made for HTTP API suites: the service under test and its mocked dependencies run as the suite's `stack`.
+
+```yaml
+    test:
+      run: .venv/bin/python -m pytest -p localci_pytest
+      list: .venv/bin/python -m localci_pytest list
+```
+
+`-p localci_pytest` loads it (installing the package also registers it as a `pytest11` plugin). It acts only when
+`$LOCALCI_REPORT` is set, so a plain `pytest` run of the same suite is unchanged: nothing is written and no hook is called.
+
+- **Ids.** `project` is `$LOCALCI_PROJECT` or the name of pytest's rootdir, `file` is relative to the rootdir, and the
+  titles are the classes and the test's name, a parametrized id (`test_total[mug-3]`) included. Keep the rootdir at the
+  repository's root: file filters and `--affected` read `file` as relative to the repository. `list` runs without the
+  suite's `env`, so set `LOCALCI_PROJECT` nowhere or in both commands, or the listing and the run disagree.
+- **`list`** prints NDJSON `{test,file,title,line}` and runs no test. Arguments after `list` go to pytest (`-k`,
+  paths). It exits with 2 when a test file does not collect, so its tests cannot vanish from a run unnoticed.
+- **`$LOCALCI_TESTS`** keeps the listed ids; the rest are deselected, not skipped.
+- **Steps.** `with localci_pytest.step("place the order"):` is a step of kind `step`; steps nest. Every fixture of
+  your own that really runs is a step of kind `hook`, `setup: <name>`, and a `yield` fixture also `teardown: <name>`.
+  pytest's own fixtures (`tmp_path`, `monkeypatch`) are left out. Outside a test, or without localci, `step` does nothing.
+- **Status.** A failure in setup, call or teardown is `failed`; a skip is `skipped`. An `xfail` that fails as declared
+  and a non-strict `xpass` are `passed`, like Playwright's `test.fail()`. pytest has no timeout of its own, so `timedout`
+  is never sent. With `pytest-rerunfailures` every attempt is its own `test.begin`/`test.end` with its `retry`;
+  with `pytest-xdist` the workers report the tests and the process that started them reports `begin` and `end`.
+- **`failure`.** `step` is the names of your `step` blocks around the failing line (else `setup: <fixture>` for a
+  fixture that failed, else the test's name). `message` is pytest's short report of the exception. `expected` and
+  `actual` are filled for `assert actual == expected` (that order) and are `null` for any other failure. `location` is the
+  failing line in the test's own file. `console` and `network` are empty and `aria`, `screenshot` and `trace` are `null`:
+  there is no browser.
+- **Hooks.** `POST $LOCALCI_API/hooks/test/begin` before and `…/end` after each attempt, with the token, waiting for the
+  answer; the core being down or slow never fails a test.
+
+Not reported: coverage, flows and checkpoints.
 
 ## Flows
 
