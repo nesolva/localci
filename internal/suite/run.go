@@ -64,6 +64,11 @@ type execution struct {
 	rec         *memo.Recorder // learns flow prefixes, nil when memo is off for the run
 	plan        *memo.Planner  // hands tests to shards in prefix order, nil for the static layout
 
+	// slots is the run's admitted grant as a pool: one slot per local shard (at least one). A local shard and a
+	// shard that fell back from a lost worker each hold one while they run, so a requeue waits for a slot of its own
+	// run and never asks the scheduler again.
+	slots chan struct{}
+
 	mirrors     map[string]*exec.Mirror
 	explainOnly bool
 	selected    *selection // the listed and the run tests, once the run got that far
@@ -349,6 +354,7 @@ func (ex *execution) run() error {
 			return err
 		}
 	}
+	ex.openSlots()
 	ex.setState(store.StateRunning)
 
 	// Parallel part.
@@ -368,6 +374,12 @@ func (ex *execution) run() error {
 				errs[i] = ex.runRemoteShard(i+1, tids)
 				return
 			}
+			freeSlot, err := ex.takeSlot()
+			if err != nil {
+				errs[i] = err
+				return
+			}
+			defer freeSlot()
 			if plan != nil {
 				errs[i] = ex.runMemoShard(i+1, plan)
 				return
@@ -392,6 +404,22 @@ func (ex *execution) run() error {
 		return ex.ctx.Err()
 	}
 	return ex.finalize()
+}
+
+// openSlots sizes the pool to what the run was admitted: one slot per local shard, and one even with none, so a
+// requeued shard never waits on an empty pool.
+func (ex *execution) openSlots() { ex.slots = make(chan struct{}, max(ex.localShards, 1)) }
+
+// takeSlot waits for one slot of the run's own grant and returns the function that gives it back (once). It ends
+// with the run's context, so a cancelled run never waits on a pool nobody will free.
+func (ex *execution) takeSlot() (func(), error) {
+	select {
+	case ex.slots <- struct{}{}:
+		var once sync.Once
+		return func() { once.Do(func() { <-ex.slots }) }, nil
+	case <-ex.ctx.Done():
+		return nil, ex.ctx.Err()
+	}
 }
 
 // selection is what the run listed and what it runs.

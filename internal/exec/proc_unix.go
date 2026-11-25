@@ -6,10 +6,15 @@ import (
 	"context"
 	"os"
 	osexec "os/exec"
+	"slices"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
+
+// subreaper is set once this process adopts the orphans of its descendants (BecomeSubreaper).
+var subreaper atomic.Bool
 
 func setGroup(cmd *osexec.Cmd) { cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} }
 
@@ -26,10 +31,13 @@ func stopGroup(pgid int, grace time.Duration) {
 	}
 	syscall.Kill(-pgid, syscall.SIGTERM)
 	deadline := time.Now().Add(grace)
+	// A member that ended is a zombie in the group until its parent collects it: a subreaper is that parent.
 	for groupExists(pgid) && time.Now().Before(deadline) {
+		reapAdopted(pgid, nil)
 		time.Sleep(20 * time.Millisecond)
 	}
 	syscall.Kill(-pgid, syscall.SIGKILL)
+	reapAdopted(pgid, nil)
 }
 
 func exitCode(ps *os.ProcessState) int {
@@ -78,21 +86,29 @@ func (r *remembered) stop(grace time.Duration) {
 		return r.ours(rows)
 	}
 	pids := live()
+	killed := slices.Clone(pids)
 	for _, pid := range pids {
 		syscall.Kill(pid, syscall.SIGTERM)
 	}
 	deadline := time.Now().Add(grace)
 	for len(pids) > 0 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
+		reapAdopted(-1, killed)
 		pids = live()
 	}
 	for _, pid := range pids {
 		syscall.Kill(pid, syscall.SIGKILL)
 	}
+	// Collect what the kill left, SIGKILL included, so a subreaper does not keep zombies.
+	for i := 0; i < 50 && subreaper.Load() && len(pids) > 0 && reapAdopted(-1, pids) < len(pids); i++ {
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // ours is the pids in rows that are still the remembered processes: same start time as when they were noted, and a
-// parent that is another remembered process or none (init took them in).
+// parent that is another remembered process, or none (init took them in), or this process when it is a subreaper
+// (it took them in). Only a pid this command's tree noted can pass: a process that merely has this process as its
+// parent, such as another run's command or one of serve's own children, is not in the set and is left alone.
 func (r *remembered) ours(rows []psRow) []int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -102,7 +118,7 @@ func (r *remembered) ours(rows []psRow) []int {
 		if !ok || start != row.start {
 			continue
 		}
-		if _, parentKnown := r.pids[row.ppid]; row.ppid == 1 || parentKnown {
+		if _, parentKnown := r.pids[row.ppid]; row.ppid == 1 || parentKnown || (subreaper.Load() && row.ppid == os.Getpid()) {
 			out = append(out, row.pid)
 		}
 	}

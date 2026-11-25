@@ -16,6 +16,7 @@ import (
 
 	"github.com/nesolva/localci/internal/capacity"
 	"github.com/nesolva/localci/internal/config"
+	"github.com/nesolva/localci/internal/exec"
 	"github.com/nesolva/localci/internal/flock"
 	"github.com/nesolva/localci/internal/notify"
 	"github.com/nesolva/localci/internal/server"
@@ -56,6 +57,9 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	if len(eff.Repos) == 0 {
 		fmt.Fprintln(stderr, "localci: no `repos` in the config: pull requests are not watched, `localci run` still works")
 	}
+	// Under a Linux user service the orphans of a run are adopted by the service manager, out of a run's cleanup's
+	// reach: adopt them here instead. Nothing happens on macOS.
+	exec.BecomeSubreaper()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	machine := capacity.Detect(ctx)
