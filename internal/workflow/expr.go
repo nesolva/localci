@@ -28,15 +28,18 @@ const (
 	kindBool
 	kindNumber
 	kindNull
+	kindObject
 )
 
-// val is an expression value: a string, boolean, number or null. s is the
-// text form (what ${{ }} prints; for a number, the text the author wrote).
+// val is an expression value: a string, boolean, number, null or object. s is
+// the text form (what ${{ }} prints; for a number, the text the author wrote;
+// for an object, its compact JSON).
 type val struct {
 	kind valKind
 	s    string
 	b    bool
 	n    float64
+	obj  map[string]val // kindObject: the entries `matrix.a.b` reads
 }
 
 func strVal(s string) val { return val{s: s} }
@@ -106,6 +109,8 @@ func looseEqual(l, r val) bool {
 			return l.b == r.b
 		case kindNumber:
 			return l.n == r.n
+		case kindObject:
+			return false // GitHub compares objects by reference
 		}
 		return strings.EqualFold(l.s, r.s)
 	}
@@ -116,6 +121,14 @@ func looseEqual(l, r val) bool {
 func typedVal(n *yaml.Node) val {
 	if n != nil && n.Kind == yaml.AliasNode {
 		n = n.Alias
+	}
+	if n != nil && n.Kind == yaml.MappingNode {
+		keys, vals := mapPairs(n)
+		obj := make(map[string]val, len(keys))
+		for _, k := range keys {
+			obj[k] = typedVal(vals[k])
+		}
+		return val{kind: kindObject, s: scalar(n), obj: obj}
 	}
 	if n == nil || n.Kind != yaml.ScalarNode {
 		return strVal(scalar(n))
@@ -394,6 +407,23 @@ func (p *parser) ident(word string) (val, error) {
 	if k, ok := strings.CutPrefix(word, "matrix."); ok {
 		if t, ok := p.sc.typed[k]; ok {
 			return t, nil
+		}
+		// `matrix.config.name`: walk through object values. Like on GitHub, a
+		// missing key (or a key under a value that is not an object) is null.
+		if head, rest, nested := strings.Cut(k, "."); nested {
+			cur, ok := p.sc.typed[head]
+			if !ok {
+				return nullVal(), nil
+			}
+			for _, part := range strings.Split(rest, ".") {
+				if cur.kind != kindObject {
+					return nullVal(), nil
+				}
+				if cur, ok = cur.obj[part]; !ok {
+					return nullVal(), nil
+				}
+			}
+			return cur, nil
 		}
 		v, ok := p.sc.matrix[k]
 		if !ok {

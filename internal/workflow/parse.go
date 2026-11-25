@@ -133,8 +133,13 @@ func planJob(repo, wf, id string, n *yaml.Node, base *scope, wfEnv map[string]st
 		if rawName != "" {
 			name = sub(rawName)
 		}
+		// A name that reads the matrix is the author's to make unique; any other
+		// gets GitHub's default suffix. The suffix a name lacks is kept in Cell.
+		cell := ""
 		if !strings.Contains(rawName, "matrix.") {
 			name += cb.suffix()
+		} else {
+			cell = cb.suffix()
 		}
 
 		if cond := scalar(j["if"]); cond != "" {
@@ -160,7 +165,7 @@ func planJob(repo, wf, id string, n *yaml.Node, base *scope, wfEnv map[string]st
 			}
 		}
 
-		c := Check{Repo: repo, Workflow: wf, Job: id, Name: name, Env: nonEmpty(env), Matrix: nonEmpty(cb.vals), Timeout: defaultTimeout}
+		c := Check{Repo: repo, Workflow: wf, Job: id, Name: name, Cell: cell, Env: nonEmpty(env), Matrix: nonEmpty(cb.vals), Timeout: defaultTimeout}
 		if t := scalar(j["timeout-minutes"]); t != "" {
 			var m float64
 			if _, err := fmt.Sscanf(sub(t), "%g", &m); err == nil && m > 0 {
