@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -297,5 +299,54 @@ func TestRunPageStaysSmallWhenAStepReportsAnAbsurdTime(t *testing.T) {
 	_, page, _ = get(t, serve(t, f), "/runs/ry")
 	if n := strings.Count(page, `class="grid"`); n == 0 || n > 13 {
 		t.Fatalf("the stored lane draws %d ticks (page is %d bytes); want 1 to 13", n, len(page))
+	}
+}
+
+// Test ids are opaque (protocol.md): one may hold a path and a hash. Every link to a test, from the timeline, the
+// failure list, the DAG, the attempt picker and the screenshot, must lead to that test.
+func TestEveryLinkToATestWhoseIdHasASlashOrHashOpensIt(t *testing.T) {
+	f := newFixture(t)
+	const id = "e2e/pay.spec.ts#places an order"
+	now := time.Now().UnixMilli()
+	must(t, f.st.PutRun(ctx, store.Run{ID: "rs", Suite: "web", Kind: store.KindSuite, State: store.StateFailed,
+		Created: now - 6000, Started: now - 5000, Finished: now}))
+	must(t, f.st.PutShard(ctx, store.Shard{Run: "rs", N: 1, State: "failed", LogPath: filepath.Join(f.dir, "shard-1.log")}))
+	must(t, os.MkdirAll(filepath.Join(f.dir, "shard-1.out"), 0o755))
+	shot := filepath.Join(f.dir, "shard-1.out", "fail.png")
+	must(t, os.WriteFile(shot, []byte("\x89PNG\r\n\x1a\nnot really"), 0o644))
+	failure, _ := json.Marshal(map[string]any{"step": "pay", "message": "boom", "screenshot": shot})
+	must(t, f.st.PutTest(ctx, store.Test{Run: "rs", Shard: 1, ID: id, Title: "places an order", Status: "failed",
+		Retry: 1, Failure: failure}))
+	must(t, f.st.PutArtifact(ctx, store.Artifact{Run: "rs", Test: id, Kind: "screenshot", Path: shot}))
+	for try := range 2 {
+		emit(t, f, "rs", 1, "test.begin", id, "", map[string]any{"test": id, "retry": try})
+		flowCall(t, f, "rs", id, id+":f1", "", "login", "aaa", "saved", 100, nil, nil)
+	}
+
+	srv := serve(t, f)
+	link := regexp.MustCompile(`(?:href|src)="(/runs/rs/tests/[^"]*)"`)
+	for _, page := range []string{"/runs/rs", "/runs/rs/dag", "/runs/rs/tests/" + url.PathEscape(id)} {
+		code, body, _ := get(t, srv, page)
+		if code != 200 {
+			t.Fatalf("%s: status %d", page, code)
+		}
+		links := link.FindAllStringSubmatch(body, -1)
+		if len(links) == 0 {
+			t.Fatalf("%s links to no test", page)
+		}
+		for _, m := range links {
+			href := html.UnescapeString(m[1])
+			code, body, hdr := get(t, srv, href)
+			switch {
+			case code != 200:
+				t.Errorf("%s: link %s gives %d", page, href, code)
+			case strings.HasSuffix(href, "/screenshot"):
+				if !strings.HasPrefix(hdr.Get("Content-Type"), "image/") {
+					t.Errorf("%s: link %s is not the screenshot", page, href)
+				}
+			case !strings.Contains(body, "places an order"):
+				t.Errorf("%s: link %s opens another page", page, href)
+			}
+		}
 	}
 }

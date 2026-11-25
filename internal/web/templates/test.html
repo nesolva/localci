@@ -30,7 +30,7 @@
 
   {{if .F.HasMatcher}}{{if .F.Message}}<section class="block"><h2 class="sub">Message</h2><pre class="message">{{.F.Message}}</pre></section>{{end}}{{end}}
 
-  {{if .Shot}}<section class="block"><h2 class="sub">Screenshot</h2><img class="shot" src="/runs/{{.R.ID}}/tests/{{.T.ID}}/screenshot" alt="Screenshot of the page when the test failed"></section>{{end}}
+  {{if .Shot}}<section class="block"><h2 class="sub">Screenshot</h2><img class="shot" src="/runs/{{.R.ID}}/tests/{{seg .T.ID}}/screenshot" alt="Screenshot of the page when the test failed"></section>{{end}}
   {{if .F.Aria}}<section class="block"><h2 class="sub">Page around the target</h2><pre>{{.F.Aria}}</pre></section>{{end}}
   {{if .F.Console}}<section class="block"><h2 class="sub">Console</h2><pre>{{range .F.Console}}{{.}}
 {{end}}</pre></section>{{end}}

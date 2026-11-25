@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"html/template"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -14,6 +15,16 @@ var funcs = template.FuncMap{
 	"ago":   func(ms int64) string { return agoAt(time.Now(), ms) },
 	"clock": func(ms int64) string { return time.UnixMilli(ms).Format("15:04:05") },
 	"who":   who,
+	"seg":   pathSeg,
+}
+
+// pathSeg escapes an opaque id (a test's, say) as one path segment: a "/", "#" or "?" in it stays inside the
+// segment, and an id of "." or ".." is not read as a move up the path.
+func pathSeg(id string) string {
+	if id == "." || id == ".." {
+		return strings.Repeat("%2E", len(id))
+	}
+	return url.PathEscape(id)
 }
 
 // fmtMS renders a duration the way people read one: 840 ms, 4.2 s, 1 m 24 s, 1 h 02 m.
