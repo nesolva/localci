@@ -28,8 +28,14 @@ function onlyListed(file: string): Pick<PlaywrightTestConfig, "grep"> {
       .filter(Boolean),
   );
   const chosen = listTests(configArgs()).filter((t) => wanted.has(t.test));
-  // `grep` sees "<project> <file relative to testDir> <titles…>"; the id check above made the choice exact.
-  const patterns = chosen.map((t) => `^\\s*${escapeRe(t.project)} \\S*${escapeRe(path.posix.basename(t.file))} ${t.titles.map(escapeRe).join(" ")}$`);
+  // `grep` sees "<project> <file relative to rootDir> <titles…>", each followed by the tags it declares: the
+  // config's after the file, a describe's after its title, the test's after its own. The id check above made the
+  // choice exact; after every part the pattern accepts this test's tags and no other word.
+  const patterns = chosen.map((t) => {
+    const tags = t.tags.length ? `(?: (?:${[...new Set(t.tags)].map(escapeRe).join("|")}))*` : "";
+    const titles = t.titles.map((title) => escapeRe(title) + tags).join(" ");
+    return `^\\s*${escapeRe(t.project)} \\S*${escapeRe(path.posix.basename(t.file))}${tags} ${titles}$`;
+  });
   return { grep: patterns.length ? new RegExp(patterns.join("|")) : /^(?!)/ };
 }
 
