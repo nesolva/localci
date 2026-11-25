@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "localci-pytest"
+version = "0.1.0"
+description = "Report pytest runs to localci: per-test results, steps and agent-ready failure reports."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+dependencies = ["pytest>=7"]
+classifiers = [
+  "Framework :: Pytest",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Repository = "https://github.com/nesolva/localci"
+
+[project.optional-dependencies]
+# What this package's own tests need: schema validation, retries and parallel workers.
+test = ["jsonschema>=4", "pytest-rerunfailures", "pytest-xdist"]
+
+# Same name as `-p localci_pytest`, so pytest never registers the plugin twice.
+[project.entry-points.pytest11]
+localci_pytest = "localci_pytest"
+
+[tool.setuptools]
+packages = ["localci_pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

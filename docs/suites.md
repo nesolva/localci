@@ -29,7 +29,7 @@ suites:
 | `prepare` | Commands run once per run in a warm workspace: `repo`, `run`, `cache_key` (files whose content decides when to run again) and `keep` (paths that survive the next checkout, such as `node_modules`). |
 | `database` | Optional. Every shard gets a database cloned from a template. `driver: postgres` (with `container`, `user`) or `driver: command` (with `create`, `drop`, `snapshot`). `template.seed` fills the template and `template.key` lists the files that make it rebuild. |
 | `stack` | Optional. Processes started for every shard: `name`, `repo`, `run`, `env`, and `ready` (`http`, `tcp` or `log`, with a `timeout`). |
-| `test` | `repo`, `run` (the command for one shard), `env`, and `list` (how to list tests; default `npx --no-install --offline localci-playwright list`). |
+| `test` | `repo`, `run` (the command for one shard), `env`, and `list` (how to list tests: NDJSON `{test,file,title,line}`; default `npx --no-install --offline localci-playwright list`, for pytest `python -m localci_pytest list`). |
 | `shards` | A number, or `auto` (from the machine's capacity). Tests are split by measured duration; a suite with fewer tests than shards leaves some shards empty. |
 | `isolation` | `isolated` (default), `shared-db`, `tenant` or `auto`; see [isolation levels](isolation.md). |
 | `timeout` | Longest a run may take, such as `10m`. |
@@ -52,3 +52,22 @@ Inside `env`, `run`, `ready` and database commands:
 - Read the port from the environment (`process.env.PORT`) in `baseURL` and in `webServer`, and set
   `reuseExistingServer: false` so a shard never talks to someone else's server.
 - `@playwright/test` must be a devDependency too (the sample pins `1.64.0`; the package needs 1.49 or newer).
+
+## In your pytest project
+
+For an HTTP API suite, or any pytest suite: `pip install localci-pytest` (Python 3.9 or newer, pytest 7 or newer),
+then point `test` at pytest and at the plugin's listing:
+
+```yaml
+    test:
+      repo: acme/orders
+      run: .venv/bin/python -m pytest -p localci_pytest
+      list: .venv/bin/python -m localci_pytest list
+      env:
+        ORDERS_URL: 'http://127.0.0.1:{{port "orders"}}'   # the service under test, started by `stack`
+```
+
+- `list` runs without the suite's `env`: read the service URLs when a test runs, not when it is collected.
+- Put `pytest.ini` (or `pyproject.toml`) at the repository's root. A test's `file` is relative to pytest's rootdir, and
+  file filters and `--affected` read it as relative to the repository.
+- [`examples/pytest-api`](../examples/pytest-api) is a complete suite; [the plugin](protocol.md#pytest-plugin) lists what it reports.

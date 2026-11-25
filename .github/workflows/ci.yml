@@ -37,6 +37,23 @@ jobs:
           node-version: "22"
       - run: make ci-playwright
 
+  pytest:
+    runs-on: ubuntu-24.04  # not -latest: setup-python has no Python 3.9 for newer images
+    strategy:
+      fail-fast: false
+      matrix:
+        include:  # the oldest Python and pytest the plugin supports, and the newest
+          - { python-version: "3.9", pytest: "pytest==7.0.1" }
+          - { python-version: "3.14", pytest: "pytest" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: make ci-pytest
+        env:
+          PYTEST_REQ: ${{ matrix.pytest }}
+
   build:
     runs-on: ubuntu-latest
     strategy:

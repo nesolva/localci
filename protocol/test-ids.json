@@ -1,0 +1,135 @@
+[
+  {
+    "project": "acme-shop",
+    "file": "tests/test_cart.py",
+    "titles": [
+      "test_total"
+    ],
+    "id": "63a3c842b2730698"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/test_cart.py",
+    "titles": [
+      "TestCart",
+      "test_total"
+    ],
+    "id": "0afbc5efbc6fd4e8"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/api/test_orders.py",
+    "titles": [
+      "TestOrders",
+      "TestRefunds",
+      "test_partial"
+    ],
+    "id": "091b4ea7f3cd419a"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/test_cart.py",
+    "titles": [
+      "test_total[10-0.5]"
+    ],
+    "id": "70f04ec615f7ca22"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/test_cart.py",
+    "titles": [
+      "TestCart",
+      "test_discount[a-b-c]"
+    ],
+    "id": "d0a7c5052e086d0c"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/test_cart.py",
+    "titles": [
+      "test_quotes[\"x\"-'y']"
+    ],
+    "id": "139c07611db8864c"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/test_cart.py",
+    "titles": [
+      "test_regex[\\d+]"
+    ],
+    "id": "7b26c4ead8c57cdf"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/test_cart.py",
+    "titles": [
+      "test_price[€5-ñ]"
+    ],
+    "id": "c351588708191407"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/ünï/test_日本語.py",
+    "titles": [
+      "Tëst",
+      "test_ключ"
+    ],
+    "id": "5509293f17bd457c"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/test_emoji.py",
+    "titles": [
+      "test_😀[🛒]"
+    ],
+    "id": "2566f3d399de8354"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/test_ctrl.py",
+    "titles": [
+      "test_line\nbreak",
+      "tab\there",
+      "bell\u0001"
+    ],
+    "id": "5202ddad0af0d8f0"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/test_sep.py",
+    "titles": [
+      "test_has › separator"
+    ],
+    "id": "3aa09411c371962d"
+  },
+  {
+    "project": "acme-shop",
+    "file": "tests/test_sep.py",
+    "titles": [
+      "test_u2028 x"
+    ],
+    "id": "42cc125a3b378882"
+  },
+  {
+    "project": "",
+    "file": "test_root.py",
+    "titles": [
+      "test_empty_project"
+    ],
+    "id": "fbf784306019f719"
+  },
+  {
+    "project": "acme-shop",
+    "file": "test_root.py",
+    "titles": [],
+    "id": "fe082619980660db"
+  },
+  {
+    "project": "acme-shop",
+    "file": "../outside/test_up.py",
+    "titles": [
+      "test_up"
+    ],
+    "id": "3bdef0a9d9a97922"
+  }
+]
