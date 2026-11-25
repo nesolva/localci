@@ -216,7 +216,7 @@ func (r *Runner) Submit(ctx context.Context, req Request) (Submission, error) {
 	}
 	// Every name is final before the first status is created: two checks that
 	// shared a context would overwrite each other's status on the commit.
-	runnable = UniqueNames(runnable)
+	runnable = uniqueNames(runnable)
 	batch := newID()
 	for _, c := range runnable {
 		if req.Only != "" && forge.Context(workflowLabel(c.Workflow)+"/"+c.Name) != req.Only {
@@ -233,12 +233,12 @@ func (r *Runner) Submit(ctx context.Context, req Request) (Submission, error) {
 	return sub, nil
 }
 
-// UniqueNames gives every check of cs its own status context
+// uniqueNames gives every check of cs its own status context
 // (`localci/<workflow>/<name>`, across workflows). A check whose context is
 // shared with another gets GitHub's cell suffix (`test linux (linux, 18)`);
 // names that are unique keep their name, so contexts of existing setups do not
 // change. Cells that still collide are numbered: `(linux, 18 #2)`.
-func UniqueNames(cs []workflow.Check) []workflow.Check {
+func uniqueNames(cs []workflow.Check) []workflow.Check {
 	ctxOf := func(c workflow.Check) string { return workflowLabel(c.Workflow) + "/" + c.Name }
 	count := map[string]int{}
 	for _, c := range cs {

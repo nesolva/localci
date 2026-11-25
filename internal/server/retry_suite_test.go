@@ -46,7 +46,7 @@ func TestRetrySupersedesLabelRunStatusPosted(t *testing.T) {
     trigger: {label: run-e2e}
     test:
       run: |
-        while [ ! -f '` + gate + `' ]; do :; done
+        while [ ! -f '` + gate + `' ]; do sleep 0.05; done
         printf '{"v":1,"t":"begin","ts":1,"shard":1,"total":1}\n{"v":1,"t":"test.begin","ts":1,"test":"t1","file":"a.spec.ts","title":"x","line":1}\n{"v":1,"t":"test.end","ts":2,"test":"t1","status":"passed","ms":1,"retry":0}\n{"v":1,"t":"end","ts":3,"status":"passed"}\n' >> "$LOCALCI_REPORT"
       list: printf '{"test":"t1","file":"a.spec.ts","title":"x","line":1}\n'
 `))

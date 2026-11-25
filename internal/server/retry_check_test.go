@@ -168,3 +168,47 @@ func TestRetryCheckHeadMoved(t *testing.T) {
 		t.Errorf("message %q does not name the new head %s", he.msg, moved[:7])
 	}
 }
+
+// A check whose name got a matrix suffix (two cells shared a name) is found again on retry, and only it reruns.
+func TestRetryCheckFindsASuffixedName(t *testing.T) {
+	rg := newChecksRig(t)
+	wf := `name: CI
+on: [pull_request]
+jobs:
+  test:
+    name: test ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [linux]
+        node: [18, 20]
+    steps:
+      - run: echo ${{ matrix.node }}
+`
+	if err := os.WriteFile(filepath.Join(rg.src, ".github", "workflows", "ci.yml"), []byte(wf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rg.git("add", "-A")
+	rg.git("commit", "-q", "-m", "matrix")
+	rg.head = rg.git("rev-parse", "HEAD")
+	rg.git("update-ref", "refs/pull/1/head", rg.head)
+	sub := rg.submitAll()
+	var cell18 store.Run
+	for _, s := range sub.Runs {
+		if s.Context == "localci/CI/test linux (linux, 18)" {
+			cell18, _ = rg.st.Run(t.Context(), s.RunID)
+		}
+	}
+	if cell18.ID == "" || len(sub.Runs) != 2 {
+		t.Fatalf("submitted %+v, want the two suffixed cells", sub.Runs)
+	}
+	before := rg.checkRuns()
+	res, err := rg.srv.retryCheck(t.Context(), cell18)
+	if err != nil || len(res.Runs) != 1 {
+		t.Fatalf("retry = %+v, %v", res, err)
+	}
+	rg.runner.Wait()
+	if got := rg.checkRuns() - before; got != 1 {
+		t.Errorf("the retry started %d check runs, want 1", got)
+	}
+}

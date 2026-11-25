@@ -62,8 +62,10 @@ func TestDuplicateCellNames(t *testing.T) {
 }
 
 func TestDuplicateCellNamesStillCollidingAreNumbered(t *testing.T) {
-	check := func(name, cell string) workflow.Check { return workflow.Check{Workflow: "ci.yml", Name: name, Cell: cell} }
-	got := UniqueNames([]workflow.Check{
+	check := func(name, cell string) workflow.Check {
+		return workflow.Check{Workflow: "ci.yml", Name: name, Cell: cell}
+	}
+	got := uniqueNames([]workflow.Check{
 		check("test", " (linux, 18)"), check("test", " (linux, 18)"), check("test", " (linux, 18)"), check("solo", ""),
 	})
 	var names []string
