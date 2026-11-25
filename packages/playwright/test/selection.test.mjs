@@ -51,3 +51,12 @@ test("a shard runs tests inside an anonymous describe and reports them with thei
   const { ran, output } = runShard("playwright.config.js", tests);
   assert.deepEqual(ran, given(tests), output.slice(-800));
 });
+
+test("a project with its own grep runs only the tests the shard was given", () => {
+  const listed = list("projects.config.js");
+  // `smoke` selects two tests (its grep keeps @smoke, its grepInvert drops @slow): a shard given one runs only that one.
+  assert.deepEqual(listed.filter((t) => t.project === "smoke").map((t) => t.title).sort(), ["checkout › pays", "tagged"]);
+  const tests = [pick(listed, "all", "plain"), pick(listed, "smoke", "tagged")];
+  const { ran, output } = runShard("projects.config.js", tests);
+  assert.deepEqual(ran, given(tests), output.slice(-800));
+});
