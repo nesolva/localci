@@ -4,20 +4,28 @@ import (
 	"fmt"
 	"io"
 	"runtime/debug"
+	"strings"
 )
 
 // versionString returns the release version: the value injected at build
 // time, else the module version recorded by `go install …@vX.Y.Z`, else "dev".
 func versionString() string {
-	if version != "dev" {
-		return version
+	info, _ := debug.ReadBuildInfo()
+	return pickVersion(version, info)
+}
+
+// pickVersion prints a `go install` build like a release build: "0.1.0",
+// not the module tag "v0.1.0".
+func pickVersion(stamped string, info *debug.BuildInfo) string {
+	if stamped != "dev" {
+		return stamped
 	}
-	if info, ok := debug.ReadBuildInfo(); ok {
+	if info != nil {
 		if v := info.Main.Version; v != "" && v != "(devel)" {
-			return v
+			return strings.TrimPrefix(v, "v")
 		}
 	}
-	return version
+	return stamped
 }
 
 func init() {
