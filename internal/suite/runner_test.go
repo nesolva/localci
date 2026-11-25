@@ -332,6 +332,10 @@ func TestFiltersChooseTheTests(t *testing.T) {
 		{"ids", Filter{IDs: []string{"pay1", "login2"}}, []string{"login2", "pay1"}},
 		{"grep", Filter{Grep: "^t/login"}, []string{"login1", "login2"}},
 		{"files", Filter{Files: []string{"t/pay1.spec"}}, []string{"pay1"}},
+		// The runner lists files relative to its own test dir; people type them from the repo root, or absolute.
+		{"file from the repo root", Filter{Files: []string{"e2e/t/pay1.spec"}}, []string{"pay1"}},
+		{"absolute file", Filter{Files: []string{"/home/me/shop/e2e/t/pay1.spec"}}, []string{"pay1"}},
+		{"directory from the repo root", Filter{Files: []string{"e2e/t/"}}, []string{"broken1", "login1", "login2", "pay1"}},
 		{"ids and grep must both match", Filter{IDs: []string{"pay1", "login1"}, Grep: "login"}, []string{"login1"}},
 	}
 	for _, c := range cases {

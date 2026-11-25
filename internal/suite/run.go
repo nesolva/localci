@@ -478,11 +478,24 @@ func (ex *execution) applyFilter(all []listedTest) ([]listedTest, error) {
 	return out, nil
 }
 
+// matchesFile says whether a listed file is one of files or inside one of them. The runner lists files relative to
+// its own test directory (Playwright's testDir), while people type them from the repository root or as absolute
+// paths, so a filter also matches when one of its trailing path parts names the listed file or a directory above it.
 func matchesFile(files []string, file string) bool {
 	for _, f := range files {
 		f = strings.TrimSuffix(filepath.ToSlash(filepath.Clean(f)), "/")
-		if file == f || strings.HasSuffix(file, "/"+f) || strings.HasPrefix(file, f+"/") {
+		if strings.HasSuffix(file, "/"+f) {
 			return true
+		}
+		for tail := f; tail != ""; {
+			if file == tail || strings.HasPrefix(file, tail+"/") {
+				return true
+			}
+			_, rest, ok := strings.Cut(tail, "/")
+			if !ok {
+				break
+			}
+			tail = rest
 		}
 	}
 	return false
