@@ -376,6 +376,8 @@ func (ex *execution) run() error {
 			}
 			freeSlot, err := ex.takeSlot()
 			if err != nil {
+				// Cancelled or timed out while waiting for a slot: the shard still leaves its row.
+				ex.putShard(i+1, store.StateFailed, filepath.Join(ex.logDir, fmt.Sprintf("shard-%d.log", i+1)), sched.Cost{}, 0)
 				errs[i] = err
 				return
 			}

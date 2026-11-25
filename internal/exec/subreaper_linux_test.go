@@ -32,10 +32,34 @@ func TestHelperSubreaper(t *testing.T) {
 		}
 		os.Exit(0)
 	case "subreaper-serve":
+		zombieSweepEvery = 100 * time.Millisecond
 		if os.Getenv("SUBREAPER") == "1" {
 			BecomeSubreaper()
 		}
 		dir := os.Getenv("HELPER_DIR")
+		if os.Getenv("ORPHAN_ONLY") == "1" {
+			// Nothing of the tree is noted (the sampling period is an hour), so the cleanup never learns of the
+			// orphan: its shell ends first, and it ends on its own a second later. Only the sweep can collect it.
+			p, err := Start(context.Background(), Spec{
+				Cmd:         `setsid timeout 1 tail -f /dev/null >/dev/null 2>&1 & sleep 0.3`,
+				LogPath:     filepath.Join(dir, "run.log"),
+				SampleEvery: time.Hour,
+			})
+			if err != nil {
+				fmt.Println("start failed:", err)
+				os.Exit(0)
+			}
+			p.Wait()
+			time.Sleep(2500 * time.Millisecond)
+			n := 0
+			for _, c := range children() {
+				if c.zombie {
+					n++
+				}
+			}
+			fmt.Printf("ZOMBIES %d\n", n)
+			os.Exit(0)
+		}
 		// The server is a child of the command's shell, in a session of its own (so out of the group's signal), and
 		// the shell ends while it runs: the server is orphaned.
 		p, err := Start(context.Background(), Spec{
@@ -103,4 +127,28 @@ func TestEscapedGrandchildKilledUnderSubreaper(t *testing.T) {
 	if pid, alive := runSubreaperScenario(t, "1"); alive {
 		t.Fatalf("the server (pid %d) outlived the run's cleanup although serve was a subreaper", pid)
 	}
+}
+
+// A subreaper adopts orphans the run's cleanup never learned of too. When one ends on its own it must not stay a
+// zombie child of serve for ever (init collected it before serve was a subreaper).
+func TestAdoptedOrphanThatEndsLaterIsCollected(t *testing.T) {
+	if _, err := osexec.LookPath("setsid"); err != nil {
+		t.Skip("no setsid")
+	}
+	cmd := osexec.Command(os.Args[0], "-test.run=^TestHelperSubreaper$")
+	cmd.Env = append(os.Environ(), "LOCALCI_HELPER=subreaper-manager", "SUBREAPER=1", "ORPHAN_ONLY=1", "HELPER_DIR="+t.TempDir())
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("scenario: %v\n%s", err, out)
+	}
+	var n int
+	for _, l := range strings.Split(string(out), "\n") {
+		if _, err := fmt.Sscanf(l, "ZOMBIES %d", &n); err == nil {
+			if n != 0 {
+				t.Fatalf("%d adopted orphans stay as zombies", n)
+			}
+			return
+		}
+	}
+	t.Fatalf("scenario printed no result:\n%s", out)
 }

@@ -7,7 +7,11 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
+
+// zombieSweepEvery is how often the subreaper looks for adopted orphans that ended on their own.
+var zombieSweepEvery = 30 * time.Second
 
 // prSetChildSubreaper is PR_SET_CHILD_SUBREAPER from <linux/prctl.h>.
 const prSetChildSubreaper = 36
@@ -20,7 +24,30 @@ func BecomeSubreaper() bool {
 		return false
 	}
 	subreaper.Store(true)
+	go sweepZombies(zombieSweepEvery)
 	return true
+}
+
+// sweepZombies collects the exit status of adopted orphans nobody else will: one that escaped a run's tree before it
+// was noted, and ended later, stays a zombie child of this process. Other children are waited for by os/exec within
+// moments of their end, so a zombie that is still there on two looks in a row, a whole period apart (it holds its pid,
+// so it is the same one), has no one waiting for it.
+func sweepZombies(every time.Duration) {
+	seen := map[int]bool{}
+	for range time.Tick(every) {
+		now := map[int]bool{}
+		for _, c := range children() {
+			if !c.zombie {
+				continue
+			}
+			now[c.pid] = true
+			if seen[c.pid] {
+				var ws syscall.WaitStatus
+				syscall.Wait4(c.pid, &ws, syscall.WNOHANG, nil)
+			}
+		}
+		seen = now
+	}
 }
 
 // procState is one line of /proc: what reaping needs to know about a process.
