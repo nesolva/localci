@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -51,7 +52,7 @@ type Options struct {
 	MaxAge  time.Duration // ignore PRs not updated for this long (0 = no limit)
 	Drafts  bool          // also trigger on draft PRs
 	Forks   string        // never | label | always
-	Label   string        // label that triggers a run (default "e2e")
+	Labels  []string      // labels that trigger a run, the suites' trigger.label (default "e2e")
 	OKLabel string        // label that approves a fork PR (default "ok-to-test")
 
 	// OnError receives errors of a poll (the watcher carries on).
@@ -60,11 +61,34 @@ type Options struct {
 
 // OptionsFromConfig fills the watch options from the effective configuration.
 func OptionsFromConfig(c *config.Config, token string) Options {
-	o := Options{Token: token, Poll: c.Watch.Poll, MaxAge: c.Watch.MaxAge, Drafts: c.Watch.Drafts, Forks: c.Watch.Forks}
+	o := Options{Token: token, Poll: c.Watch.Poll, MaxAge: c.Watch.MaxAge, Drafts: c.Watch.Drafts, Forks: c.Watch.Forks,
+		Labels: suiteLabels(c.Suites)}
 	for _, r := range c.Repos {
 		o.Repos = append(o.Repos, r.Name)
 	}
 	return o
+}
+
+// suiteLabels lists the distinct `trigger.label` of the configured suites, sorted. The suites are read raw here
+// (the suite package builds on this one); a label is kept as written, since the dispatcher compares it as is.
+func suiteLabels(suites map[string]any) []string {
+	var out []string
+	for _, s := range suites {
+		m, _ := s.(map[string]any)
+		trig, _ := m["trigger"].(map[string]any)
+		var l string
+		switch v := trig["label"].(type) {
+		case string:
+			l = v
+		case int, int64, uint64, bool:
+			l = fmt.Sprint(v)
+		}
+		if l != "" && !slices.Contains(out, l) {
+			out = append(out, l)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // ResolveToken returns $GITHUB_TOKEN, else the output of `gh auth token`.
@@ -111,8 +135,8 @@ func NewGitHub(o Options) *GitHub {
 	if g.o.Poll <= 0 {
 		g.o.Poll = time.Minute
 	}
-	if g.o.Label == "" {
-		g.o.Label = "e2e"
+	if len(g.o.Labels) == 0 {
+		g.o.Labels = []string{"e2e"}
 	}
 	if g.o.OKLabel == "" {
 		g.o.OKLabel = "ok-to-test"

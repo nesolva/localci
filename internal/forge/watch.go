@@ -65,11 +65,11 @@ func (p *apiPull) hasLabel(name string) bool {
 
 // prState is what the watcher remembers about one open PR.
 type prState struct {
-	emittedHead  string // last head a push trigger was handled for
-	tryHead      string // head whose handler answered ErrNotReady ...
-	tries        int    // ... this many times so far
-	labelSeen    bool   // the trigger label was present at the last look
-	approvedHead string // fork PR: the head a writer's review approved (a cache only)
+	emittedHead  string          // last head a push trigger was handled for
+	tryHead      string          // head whose handler answered ErrNotReady ...
+	tries        int             // ... this many times so far
+	labelsSeen   map[string]bool // the trigger labels present at the last look
+	approvedHead string          // fork PR: the head a writer's review approved (a cache only)
 }
 
 // Watch polls every configured repo each poll interval and emits triggers until
@@ -188,12 +188,18 @@ func (g *GitHub) handlePulls(ctx context.Context, repo string, pulls []apiPull, 
 				st.emittedHead, st.tryHead, st.tries = p.Head.SHA, "", 0
 			}
 		}
-		if has := p.hasLabel(g.o.Label); has && !st.labelSeen {
-			st.labelSeen = true
-			t.Kind, t.Label = KindLabel, g.o.Label
-			_ = emit(t)
-		} else if !has {
-			st.labelSeen = false
+		for _, l := range g.o.Labels {
+			if has := p.hasLabel(l); has && !st.labelsSeen[l] {
+				if st.labelsSeen == nil {
+					st.labelsSeen = map[string]bool{}
+				}
+				st.labelsSeen[l] = true
+				lt := t
+				lt.Kind, lt.Label = KindLabel, l
+				_ = emit(lt)
+			} else if !has {
+				delete(st.labelsSeen, l)
+			}
 		}
 	}
 	for key := range g.prs {
