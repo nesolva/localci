@@ -46,16 +46,8 @@ func Watch(ctx context.Context, st *store.Store, bus *event.Bus, on []string, s 
 		if err != nil || !startedByHand(run) {
 			continue
 		}
-		var failed, total int
-		if tests, err := st.RunTests(ctx, run.ID); err == nil {
-			total = len(tests)
-			for _, t := range tests {
-				if t.Status == "failed" {
-					failed++
-				}
-			}
-		}
-		m := Describe(run, failed, total)
+		c, _ := st.TestCounts(ctx, run.ID) // the counts the dashboard and the pull request status show
+		m := Describe(run, c.Failed, c.Total)
 		if url != nil {
 			m.URL = url(run.ID)
 		}
