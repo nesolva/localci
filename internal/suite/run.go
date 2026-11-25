@@ -320,9 +320,14 @@ func (ex *execution) run() error {
 		localN = n - remoteN
 	}
 	ex.layout = shard.Plan(ids, medians, n, serial)
-	ex.localShards = min(localN, len(ex.layout.Shards))
 	if err := ex.applyLevel(ids, medians, serial, n); err != nil {
 		return err
+	}
+	// An isolation level may lay the run out again with its own count (tenant pays the stack once): with no
+	// remote slots every shard of the final layout runs here.
+	ex.localShards = len(ex.layout.Shards)
+	if remoteN > 0 {
+		ex.localShards = min(localN, ex.localShards)
 	}
 	ex.emit(0, "run.planned", "", "", map[string]any{
 		"tests": len(ids), "shards": len(ex.layout.Shards), "serial": len(ex.layout.Serial),
