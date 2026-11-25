@@ -59,7 +59,7 @@ func TestExecLineKeepsTheScriptInOneArgument(t *testing.T) {
 	}
 	b, _ := os.ReadFile(out)
 	got := strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
-	want := []string{"exec", "-w", "/w/sub dir", "-e", "A=1", "-e", "B=two words", "job1", "bash", "-eo", "pipefail", "-c"}
+	want := []string{"exec", "-w", "/w/sub dir", "-e", "A=1", "-e", "B=two words", "job1", "bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"}
 	if strings.Join(got[:len(want)], "|") != strings.Join(want, "|") || strings.Join(got[len(want):], "\n") != script {
 		t.Fatalf("docker got %q", got)
 	}

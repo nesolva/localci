@@ -305,10 +305,10 @@ func (j *job) runAct(ctx context.Context, dir string) outcome {
 }
 
 // stack is what a job's steps run in: nothing (the host), or a container with
-// its services on a private network.
+// its services in the same network namespace.
 type stack struct {
-	j          *job
-	network    string
+	j *job
+	// containers in start order; the job container is first and owns the namespace, so they go in reverse.
 	containers []string
 	jobCont    string
 	ws         string
@@ -327,11 +327,6 @@ func (s *stack) down() {
 			s.j.logf("cleanup: %v", err)
 		}
 	}
-	if s.network != "" {
-		if err := exec.RemoveNetwork(ctx, s.network); err != nil {
-			s.j.logf("cleanup: %v", err)
-		}
-	}
 }
 
 // up starts the services and the job container the check needs, if any. The
@@ -339,6 +334,13 @@ func (s *stack) down() {
 func (j *job) up(ctx context.Context, ws string, tc exec.Toolchain) (*stack, string, error) {
 	c := j.check
 	s := &stack{j: j, ws: ws}
+	notes, err := servicePlan(c.Services)
+	if err != nil {
+		return s, "", err
+	}
+	for _, n := range notes {
+		j.logf("%s", n)
+	}
 	image := ""
 	var cont workflow.Container
 	switch {
@@ -351,7 +353,7 @@ func (j *job) up(ctx context.Context, ws string, tc exec.Toolchain) (*stack, str
 	case tc.Image != "":
 		image = tc.Image
 	case len(c.Services) > 0:
-		// Services are reached by alias on a Docker network, so the job has to be on it.
+		// Services share the job container's network namespace, so the job has to be in a container.
 		if image = tc.ContainerImage(); image == "" {
 			if image = j.r.Options.DefaultImage; image == "" {
 				image = defaultImage
@@ -367,34 +369,30 @@ func (j *job) up(ctx context.Context, ws string, tc exec.Toolchain) (*stack, str
 	if !exec.DockerAvailable() {
 		return s, "", errors.New("this check cannot run: Docker is not running, and it needs it")
 	}
-	if len(c.Services) > 0 {
-		s.network = "localci-" + j.id
-		if err := exec.CreateNetwork(ctx, s.network); err != nil {
-			return s, "", err
-		}
-	}
-	for i, svc := range c.Services {
-		name := fmt.Sprintf("localci-%s-svc%d", j.id, i+1)
-		spec := exec.ContainerSpec{Name: name, Image: svc.Image, Network: s.network, Aliases: []string{svc.Name},
-			Env: svc.Env, Volumes: svc.Volumes, Options: svc.Options, Run: j.id}
-		s.containers = append(s.containers, name)
-		if err := exec.StartContainer(ctx, spec); err != nil {
-			return s, "", fmt.Errorf("service %s: %w", svc.Name, err)
-		}
-		if strings.Contains(svc.Options, "--health-cmd") {
-			if err := exec.WaitHealthy(ctx, name, healthTimeout); err != nil {
-				return s, "", err
-			}
-		}
-	}
+	// The job container owns the network namespace: every service name resolves to 127.0.0.1 in its hosts file
+	// (Docker refuses --add-host on a container that joins another's namespace, and the services share this file).
 	name := "localci-" + j.id + "-job"
-	spec := exec.ContainerSpec{Name: name, Image: image, Network: s.network, Env: cont.Env, Workdir: ws,
+	spec := exec.ContainerSpec{Name: name, Image: image, AddHosts: serviceNames(c.Services), Env: cont.Env, Workdir: ws,
 		Volumes: append([]string{ws + ":" + ws, filepath.Join(j.mirror.Dir, "objects") + ":" + filepath.Join(j.mirror.Dir, "objects") + ":ro"}, cont.Volumes...),
 		Options: cont.Options, Run: j.id}
 	s.containers = append(s.containers, name)
 	s.jobCont = name
 	if err := exec.StartJobContainer(ctx, spec); err != nil {
 		return s, "", fmt.Errorf("job container: %w", err)
+	}
+	for i, svc := range c.Services {
+		sname := fmt.Sprintf("localci-%s-svc%d", j.id, i+1)
+		sspec := exec.ContainerSpec{Name: sname, Image: svc.Image, Network: "container:" + name,
+			Env: svc.Env, Volumes: svc.Volumes, Options: svc.Options, Run: j.id}
+		s.containers = append(s.containers, sname)
+		if err := exec.StartContainer(ctx, sspec); err != nil {
+			return s, "", fmt.Errorf("service %s: %w", svc.Name, err)
+		}
+		if strings.Contains(svc.Options, "--health-cmd") {
+			if err := exec.WaitHealthy(ctx, sname, healthTimeout); err != nil {
+				return s, "", err
+			}
+		}
 	}
 	return s, name, nil
 }
@@ -494,10 +492,7 @@ func (j *job) runStep(ctx context.Context, sid string, st workflow.Step, ws, con
 		spec.Cmd = exec.ExecLine(container, dir, shell, env, script)
 		spec.Dir = ws
 	} else {
-		if shell == "sh" {
-			script = "sh -e -c " + exec.ShellQuote(script)
-		}
-		spec.Cmd = tc.Wrap(script)
+		spec.Cmd = tc.Wrap(exec.StepCommand(shell, script))
 		for _, k := range sortedKeys(env) {
 			spec.Env = append(spec.Env, k+"="+env[k])
 		}

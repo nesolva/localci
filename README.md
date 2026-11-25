@@ -88,6 +88,10 @@ skill cover the rest.
   infrastructure, with the evidence. A broken selector becomes a patch you review, never a silent change.
 - **Pull-request checks.** The jobs in `.github/workflows` run on your machine with caches warm, using the merge
   result, `paths` filters, matrices and `services:`, and post commit statuses back.
+  A job with `services:` runs in a container that shares its services' network, so `localhost:<port>` and the
+  service name both work, as on GitHub's runners; nothing is published on your machine, so your own Postgres on 5432
+  is left alone. A `ports:` remap like `5433:5432` is not applied (the job log says which port to use). A step
+  without `shell:` runs `bash -e`, and `shell: bash` adds `pipefail`, as on GitHub.
 - **Nightly exploration.** An [agent](docs/explore.md) explores your app against goals you write and reports what it
   finds. It never gates a merge.
 - **Workers (experimental).** [Another machine](docs/workers.md) can join and run shards. It has not been tried on
