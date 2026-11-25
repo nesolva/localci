@@ -46,7 +46,8 @@ func agoAt(now time.Time, ms int64) string {
 	return fmt.Sprintf("%d d ago", int(d.Hours()/24))
 }
 
-// niceStep picks a round tick spacing (ms) giving about 5 ticks over span.
+// niceStep picks a round tick spacing (ms) giving about 5 ticks over span, and never more than 6 however long the
+// span: past five hours the spacing is a whole number of hours.
 func niceStep(span int64) int64 {
 	if span <= 0 {
 		return 1000
@@ -58,7 +59,8 @@ func niceStep(span int64) int64 {
 			return s
 		}
 	}
-	return steps[len(steps)-1]
+	hour := steps[len(steps)-1]
+	return (span/5/hour + 1) * hour
 }
 
 func firstLine(s string) string {

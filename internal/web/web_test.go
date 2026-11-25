@@ -3,11 +3,14 @@ package web
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -237,5 +240,62 @@ func TestPagesCarryTheSecurityHeaders(t *testing.T) {
 	_, _, h := get(t, serve(t, f), "/")
 	if !strings.Contains(h.Get("Content-Security-Policy"), "default-src 'self'") || h.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("headers: %v", h)
+	}
+}
+
+// A report's times are data from the test process: a step that claims to last 100,000 hours, or to have begun in
+// 1970, must not stretch the run's axis. The page keeps a handful of ticks and the honest steps stay readable.
+func TestRunPageStaysSmallWhenAStepReportsAnAbsurdTime(t *testing.T) {
+	f := newFixture(t)
+	now := time.Now().UnixMilli()
+	must(t, f.st.PutRun(ctx, store.Run{ID: "rx", Suite: "web", Kind: store.KindSuite, State: store.StatePassed,
+		Created: now - 10_000, Started: now - 9_000, Finished: now}))
+	ev := func(kind, test, step string, ts int64, p map[string]any) {
+		t.Helper()
+		p["v"], p["t"], p["ts"] = 1, kind, ts
+		raw, _ := json.Marshal(p)
+		if _, err := f.st.AppendEvent(ctx, store.Event{TS: now, Run: "rx", Shard: 1, Kind: kind, Test: test, Step: step, Data: raw}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, c := range []struct {
+		test   string
+		ts, ms int64
+	}{
+		{"t1", now - 9_000, 1_000},           // honest
+		{"t2", now - 8_000, 360_000_000_000}, // 100,000 hours
+		{"t3", 1, 500},                       // began at the epoch
+	} {
+		must(t, f.st.PutTest(ctx, store.Test{Run: "rx", Shard: 1, ID: c.test, Title: "case " + c.test, Status: "passed"}))
+		step := c.test + ":" + strconv.Itoa(i)
+		ev("test.begin", c.test, "", c.ts, map[string]any{"test": c.test})
+		ev("step.begin", c.test, step, c.ts, map[string]any{"test": c.test, "step": step, "title": "step of " + c.test, "kind": "step"})
+		ev("step.end", c.test, step, c.ts, map[string]any{"step": step, "ms": c.ms, "ok": true})
+	}
+
+	code, page, _ := get(t, serve(t, f), "/runs/rx")
+	if code != 200 {
+		t.Fatalf("status %d", code)
+	}
+	if n := strings.Count(page, `class="grid"`); n > 13 {
+		t.Fatalf("the lane draws %d ticks (page is %d bytes); want at most 13", n, len(page))
+	}
+	m := regexp.MustCompile(`style="left:[0-9.]+%;width:([0-9.]+)%" data-tip="case t1 `).FindStringSubmatch(page)
+	if m == nil {
+		t.Fatal("the honest test has no bar")
+	}
+	if w, _ := strconv.ParseFloat(m[1], 64); w < 5 {
+		t.Errorf("the honest one-second test is %.4f%% wide in a ten-second run; absurd steps squashed it", w)
+	}
+
+	// An older run whose steps were stored without events draws from the steps table: same cap.
+	must(t, f.st.PutRun(ctx, store.Run{ID: "ry", Suite: "web", Kind: store.KindSuite, State: store.StatePassed,
+		Created: now - 10_000, Started: now - 9_000, Finished: now}))
+	must(t, f.st.PutTest(ctx, store.Test{Run: "ry", Shard: 1, ID: "t2", Title: "case t2", Status: "passed"}))
+	must(t, f.st.PutStep(ctx, store.Step{Run: "ry", Test: "t2", ID: "s", Title: "long", Kind: "step", Start: now - 8_000}))
+	must(t, f.st.EndStep(ctx, "ry", "t2", "s", 360_000_000_000, true))
+	_, page, _ = get(t, serve(t, f), "/runs/ry")
+	if n := strings.Count(page, `class="grid"`); n == 0 || n > 13 {
+		t.Fatalf("the stored lane draws %d ticks (page is %d bytes); want 1 to 13", n, len(page))
 	}
 }
