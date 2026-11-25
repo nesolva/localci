@@ -34,7 +34,11 @@ type Check struct {
 	Job      string            `json:"job"`
 	Name     string            `json:"name"`
 	Matrix   map[string]string `json:"matrix,omitempty"`
-	Steps    []Step            `json:"steps,omitempty"`
+	// Cell is GitHub's default cell suffix (` (linux, 18)`) when Name does not
+	// carry it already. A caller that finds two checks under one name appends
+	// it to tell them apart. Not part of Key: the definition did not change.
+	Cell  string `json:"-"`
+	Steps []Step `json:"steps,omitempty"`
 	// Container is the job container, run steps execute inside it.
 	Container *Container `json:"container,omitempty"`
 	Services  []Service  `json:"services,omitempty"`

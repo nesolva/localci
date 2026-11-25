@@ -201,8 +201,7 @@ func (s *Server) retrySuite(ctx context.Context, run store.Run) (SubmitResult, e
 	json.Unmarshal(run.Heads, &heads)
 	sr := suite.Request{Suite: run.Suite, Heads: heads, Trigger: "retry", RequestedBy: requestedBy, Fork: run.Fork}
 	if run.Affected {
-		// The retry asks for the same diff, and reports under the same context: the run it replaces, if still
-		// queued, is superseded and leaves its status to the run that supersedes it.
+		// The retry asks for the same diff.
 		sr.Affected = &suite.AffectedRequest{Base: s.affectedBase(ctx, run.ID)}
 	}
 	// Read the cursor before Submit starts the job: a run that ends fast must not slip between the two.
@@ -211,12 +210,15 @@ func (s *Server) retrySuite(ctx context.Context, run store.Run) (SubmitResult, e
 	if err != nil {
 		return SubmitResult{}, bad("%v", err)
 	}
-	if run.Affected && s.d.Report != nil {
+	// A run with pull request heads reports under its own context, affected or not: a queued run the retry
+	// supersedes leaves its status to the run that supersedes it, so a retry that stayed silent would leave
+	// `localci/<suite>` pending for ever.
+	if s.d.Report != nil && slices.ContainsFunc(heads, func(h suite.Head) bool { return h.PR > 0 }) {
 		var hs []forge.Head
 		for _, h := range heads {
 			hs = append(hs, h.Head)
 		}
-		s.d.Report(id, suite.StatusName(run.Suite, true), hs, since)
+		s.d.Report(id, suite.StatusName(run.Suite, run.Affected), hs, since)
 	}
 	next, err := s.d.Store.Run(ctx, id)
 	if err != nil {
@@ -246,16 +248,26 @@ func (s *Server) retryCheck(ctx context.Context, run store.Run) (SubmitResult, e
 		return SubmitResult{}, bad("a check of a working tree cannot be retried: run `localci run --checks` again")
 	}
 	h := heads[0]
+	// Only the check being retried starts, and only its status is posted. Submit still plans and names every
+	// check of the pull request first, so a name that carries a matrix suffix is found.
+	want := forge.Context(run.Suite)
 	sub, err := s.d.Checks.Submit(ctx, checks.Request{Repo: h.Repo, PR: h.PR, Base: h.Branch, Head: h.SHA, Trigger: "manual",
-		RequestedBy: requestedBy, Force: true})
+		RequestedBy: requestedBy, Force: true, Only: want})
+	var pe *checks.PullRefError
+	if errors.As(err, &pe) {
+		if pe.MergeRef() {
+			return SubmitResult{}, conflict("GitHub has not rebuilt the merge ref of the pull request yet: retry in a moment")
+		}
+		return SubmitResult{}, conflict("the pull request moved to %s: retry from there", shortSHA(pe.Got))
+	}
 	if err != nil {
 		return SubmitResult{}, err
 	}
+	if len(sub.Runs) == 0 {
+		return SubmitResult{}, conflict("%s is not among the checks of %s#%d at %s any more: the workflow changed", want, h.Repo, h.PR, shortSHA(h.SHA))
+	}
 	res := SubmitResult{Runs: []Run{}}
 	for _, st := range sub.Runs {
-		if st.Context != "localci/"+run.Suite {
-			continue // only the check being retried
-		}
 		next, err := s.d.Store.Run(ctx, st.RunID)
 		if err != nil {
 			return res, err
@@ -263,6 +275,13 @@ func (s *Server) retryCheck(ctx context.Context, run store.Run) (SubmitResult, e
 		res.Runs = append(res.Runs, s.summarize(ctx, next))
 	}
 	return res, nil
+}
+
+func shortSHA(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
 
 // checkout is what the server needs to know about a directory it was asked to test.

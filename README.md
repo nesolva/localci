@@ -87,7 +87,10 @@ skill cover the rest.
 - **Triage.** A failed test is rerun to rule out flakiness, then called a product bug, a test bug, flaky or
   infrastructure, with the evidence. A broken selector becomes a patch you review, never a silent change.
 - **Pull-request checks.** The jobs in `.github/workflows` run on your machine with caches warm, using the merge
-  result, `paths` filters, matrices and `services:`, and post commit statuses back.
+  result, `paths` filters, matrices and `services:`, and post commit statuses back. Every check posts its own status,
+  `localci/<workflow>/<job>`. When two matrix cells have the same name, each gets GitHub's cell suffix, as in
+  `localci/CI/test linux (linux, 18)`, so a failing cell is never hidden by a passing one. Retrying a check reruns that
+  check only.
 - **Nightly exploration.** An [agent](docs/explore.md) explores your app against goals you write and reports what it
   finds. It never gates a merge.
 - **Workers (experimental).** [Another machine](docs/workers.md) can join and run shards. It has not been tried on
