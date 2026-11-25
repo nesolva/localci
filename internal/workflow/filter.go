@@ -14,7 +14,12 @@ import (
 type trigger struct {
 	branches, branchesIgnore []string
 	paths, pathsIgnore       []string
+	types                    []string // activity types; empty means the event's defaults
 }
+
+// headTypes are the pull request activities a new or pushed head is: GitHub's
+// default types for pull_request, and what localci plans checks for.
+var headTypes = []string{"opened", "synchronize", "reopened"}
 
 // readTriggers turns the value of `on:` (a string, a list or a map) into the
 // triggers it declares, keyed by event name.
@@ -42,6 +47,7 @@ func readTriggers(n *yaml.Node) map[string]*trigger {
 			t.branchesIgnore = strList(cfg["branches-ignore"])
 			t.paths = strList(cfg["paths"])
 			t.pathsIgnore = strList(cfg["paths-ignore"])
+			t.types = strList(cfg["types"])
 			out[k] = t
 		}
 	}
@@ -67,6 +73,9 @@ func strList(n *yaml.Node) []string {
 
 // skipReason says why the trigger does not fire for ev; "" means it does.
 func (t *trigger) skipReason(ev Event) string {
+	if (ev.Name == "pull_request" || ev.Name == "pull_request_target") && len(t.types) > 0 && !anyHeadType(t.types) {
+		return fmt.Sprintf("types [%s] include none of %s", strings.Join(t.types, ", "), strings.Join(headTypes, ", "))
+	}
 	if ev.Branch != "" {
 		if len(t.branches) > 0 && !matchAny(t.branches, ev.Branch) {
 			return fmt.Sprintf("branch %s does not match branches", ev.Branch)
@@ -85,6 +94,19 @@ func (t *trigger) skipReason(ev Event) string {
 		return fmt.Sprintf("all %d changed files match paths-ignore", len(ev.Files))
 	}
 	return ""
+}
+
+// anyHeadType reports whether a types list includes an activity that is a new
+// or pushed pull request head.
+func anyHeadType(types []string) bool {
+	for _, t := range types {
+		for _, h := range headTypes {
+			if strings.EqualFold(t, h) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // invalidPatterns names the filter patterns that do not compile, one message

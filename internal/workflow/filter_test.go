@@ -57,6 +57,38 @@ func TestPathsFilterOnWholeWorkflow(t *testing.T) {
 	}
 }
 
+// A pull request head is planned as GitHub's opened, synchronize or reopened activity: a workflow that only runs
+// when a pull request is closed (a publish job) or labeled must be skipped with a reason, not run on every head.
+func TestPullRequestTypesSelectTheActivity(t *testing.T) {
+	for _, tc := range []struct {
+		on   string
+		plan bool
+	}{
+		{"pull_request:\n    types: [closed]", false},
+		{"pull_request:\n    types: [labeled]", false},
+		{"pull_request:\n    types: [closed, labeled]\n    branches: [main]", false},
+		{"pull_request:\n    types: [opened, closed]", true},
+		{"pull_request:\n    types: synchronize", true},
+		{"pull_request:\n    types: [reopened]", true},
+		{"pull_request:\n    branches: [main]", true},
+		{"pull_request:", true},
+	} {
+		yml := "name: publish\non:\n  " + tc.on + "\njobs:\n  b:\n    runs-on: x\n    if: github.event.pull_request.merged == true\n    steps:\n      - run: make publish\n"
+		res := PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: "acme/app", Branch: "main", Files: []string{"a.go"}},
+			map[string][]byte{".github/workflows/publish.yml": []byte(yml)})
+		if tc.plan {
+			if len(res.Checks) != 1 || len(res.Skipped) != 0 {
+				t.Errorf("%q: must be planned, got %+v", tc.on, res)
+			}
+			continue
+		}
+		if len(res.Checks) != 0 || len(res.Skipped) != 1 || res.Skipped[0].Workflow != "publish" ||
+			!strings.Contains(res.Skipped[0].Reason, "types") {
+			t.Errorf("%q: must be skipped with a reason naming its types, got %+v", tc.on, res)
+		}
+	}
+}
+
 func TestInvalidFilterPatternPlansWithWarning(t *testing.T) {
 	for _, filter := range []string{
 		"paths: ['[z-a]']",
