@@ -195,7 +195,10 @@ func planJob(repo, wf, id string, n *yaml.Node, base *scope, wfEnv map[string]st
 			jsc.needSkipped = len(d.skipped) > 0
 			run, _, err := jsc.condition(cond)
 			if err != nil {
-				bad = append(bad, "if: "+err.Error())
+				// A job GitHub may not run (a deploy behind a secret or a
+				// variable) is not run here either.
+				skips = append(skips, Skip{Workflow: wf, Job: name, Reason: "if: " + cond + " cannot be decided before the job runs (" + err.Error() + ")"})
+				continue
 			} else if !run {
 				skips = append(skips, Skip{Workflow: wf, Job: name, Reason: "if: " + cond + " is false"})
 				continue

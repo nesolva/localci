@@ -170,3 +170,34 @@ jobs:
 		}
 	}
 }
+
+// A job whose if: cannot be decided before it runs is skipped with the reason,
+// and so are the jobs that need it.
+func TestUndecidedJobConditionSkipsTheJob(t *testing.T) {
+	wf := `on: pull_request
+jobs:
+  deploy:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: x
+    steps: [{run: echo deploy}]
+  notify:
+    needs: deploy
+    runs-on: x
+    steps: [{run: echo notify}]
+  test:
+    runs-on: x
+    steps: [{run: echo test}]
+`
+	res := PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: "acme/app", Branch: "main"},
+		map[string][]byte{".github/workflows/ci.yml": []byte(wf)})
+	if len(res.Checks) != 1 || res.Checks[0].Job != "test" {
+		t.Fatalf("planned %+v, want only test", res.Checks)
+	}
+	reasons := map[string]string{}
+	for _, s := range res.Skipped {
+		reasons[s.Job] = s.Reason
+	}
+	if !strings.Contains(reasons["deploy"], "vars.DEPLOY_ENABLED") || !strings.Contains(reasons["notify"], "needs deploy") {
+		t.Errorf("skips = %+v, want deploy (naming vars.DEPLOY_ENABLED) and notify (needs deploy)", res.Skipped)
+	}
+}

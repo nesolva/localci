@@ -24,6 +24,11 @@ configuration anywhere. It makes these network calls:
 A pull request's code runs the way a teammate's would on your laptop. Read [forks](#forks) before you watch a public
 repository.
 
+Which jobs run follows GitHub. A job is skipped when its `if:` is false for the pull request, or when a job it `needs`
+is skipped. A job is also skipped when its `if:` depends on something that is only known while the job runs: a secret,
+a variable, or another job's outputs. So a deploy gated that way never runs on your machine. `localci plan` lists each
+skipped job and the reason. A workflow you never want run here goes in the repository's `workflows.skip`.
+
 ## Credentials
 
 - GitHub: localci uses `$GITHUB_TOKEN`, else the token `gh auth token` prints. It needs access to the repositories you
