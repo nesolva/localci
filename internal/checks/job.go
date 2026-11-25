@@ -69,8 +69,9 @@ func (j *job) create(ctx context.Context) error {
 		shaForStatus = j.req.Snapshot
 	}
 	j.head = headInfo{
-		Head: forge.Head{Repo: j.req.Repo, Branch: j.req.Base, SHA: shaForStatus, PR: j.req.PR},
-		Tree: j.tree,
+		Head:       forge.Head{Repo: j.req.Repo, Branch: j.req.Base, SHA: shaForStatus, PR: j.req.PR},
+		HeadBranch: j.req.HeadBranch,
+		Tree:       j.tree,
 	}
 	if j.sha != shaForStatus {
 		j.head.Merge = j.sha

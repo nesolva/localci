@@ -40,7 +40,7 @@ func (d *Dispatcher) Handle(ctx context.Context, t forge.Trigger) error {
 	cfg := d.Config()
 	var notReady error
 	if d.Checks != nil && t.Kind == forge.KindPush && checksOn(cfg, t.Repo) {
-		_, err := d.Checks.Submit(ctx, checks.Request{Repo: t.Repo, PR: t.PR, Base: t.Base, Head: t.Head,
+		_, err := d.Checks.Submit(ctx, checks.Request{Repo: t.Repo, PR: t.PR, Base: t.Base, Head: t.Head, HeadBranch: t.Branch,
 			Trigger: "push", RequestedBy: t.Author, LastAttempt: t.LastAttempt})
 		var mc *exec.MergeConflictError
 		var pe *checks.PullRefError

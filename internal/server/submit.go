@@ -246,8 +246,17 @@ func (s *Server) retryCheck(ctx context.Context, run store.Run) (SubmitResult, e
 		return SubmitResult{}, bad("a check of a working tree cannot be retried: run `localci run --checks` again")
 	}
 	h := heads[0]
-	sub, err := s.d.Checks.Submit(ctx, checks.Request{Repo: h.Repo, PR: h.PR, Base: h.Branch, Head: h.SHA, Trigger: "manual",
-		RequestedBy: requestedBy, Force: true})
+	// The check's own record keeps the head branch, so the retry plans the
+	// same github.head_ref as the first run.
+	var rec []struct {
+		HeadBranch string `json:"headBranch"`
+	}
+	var headBranch string
+	if json.Unmarshal(run.Heads, &rec) == nil && len(rec) == 1 {
+		headBranch = rec[0].HeadBranch
+	}
+	sub, err := s.d.Checks.Submit(ctx, checks.Request{Repo: h.Repo, PR: h.PR, Base: h.Branch, Head: h.SHA,
+		HeadBranch: headBranch, Trigger: "manual", RequestedBy: requestedBy, Force: true})
 	if err != nil {
 		return SubmitResult{}, err
 	}

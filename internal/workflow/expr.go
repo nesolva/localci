@@ -506,6 +506,27 @@ func (p *parser) call(name string) (val, error) {
 	return unknownVal("function " + name + "()"), nil
 }
 
+// ref is github.ref or github.ref_name: refs/pull/<n>/merge on a pull request,
+// refs/heads/<branch> on a push. Without the pull request number (localci
+// plan, a working tree) a condition still sees a pull request ref, which no
+// branch or tag test matches; in text the number is not guessed.
+func (p *parser) ref(word string) val {
+	ev := p.sc.event
+	var ref string
+	switch {
+	case ev.Name == "pull_request" && (ev.PR > 0 || p.status):
+		ref = fmt.Sprintf("refs/pull/%d/merge", ev.PR)
+	case ev.Name == "push" && ev.Branch != "":
+		ref = "refs/heads/" + ev.Branch
+	default:
+		return unknownVal(word)
+	}
+	if word == "github.ref_name" {
+		ref = strings.TrimPrefix(strings.TrimPrefix(ref, "refs/pull/"), "refs/heads/")
+	}
+	return strVal(ref)
+}
+
 func (p *parser) ident(word string) val {
 	switch word {
 	case "true":
@@ -529,6 +550,27 @@ func (p *parser) ident(word string) val {
 			return unknownVal("github.base_ref")
 		}
 		return strVal(p.sc.event.Branch)
+	case "github.head_ref":
+		if p.sc.event.Name != "pull_request" {
+			return strVal("")
+		}
+		if p.sc.event.HeadBranch == "" {
+			return unknownVal("github.head_ref")
+		}
+		return strVal(p.sc.event.HeadBranch)
+	case "github.ref", "github.ref_name":
+		return p.ref(word)
+	case "github.ref_type":
+		return strVal("branch") // a pull request or a branch push; tags are not planned
+	case "github.repository", "github.repository_owner":
+		if p.sc.event.Repo == "" {
+			return unknownVal(word)
+		}
+		if word == "github.repository_owner" {
+			owner, _, _ := strings.Cut(p.sc.event.Repo, "/")
+			return strVal(owner)
+		}
+		return strVal(p.sc.event.Repo)
 	}
 	if k, ok := strings.CutPrefix(word, "matrix."); ok {
 		if t, ok := p.sc.typed[k]; ok {

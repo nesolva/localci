@@ -114,6 +114,8 @@ type Request struct {
 	PR   int
 	Base string
 	Head string
+	// HeadBranch is the pull request's head branch (github.head_ref).
+	HeadBranch string
 	// Snapshot is the commit of a working tree that Runner.Snapshot recorded;
 	// set it instead of PR and Head to check uncommitted work. No statuses.
 	Snapshot    string
@@ -182,7 +184,7 @@ func (r *Runner) Submit(ctx context.Context, req Request) (Submission, error) {
 		st := forge.Status{Suite: mergeRefSuite, State: forge.StateSuccess, Description: "merge ref ready"}
 		_ = r.Forge.SetStatus(ctx, req.Repo, req.Head, st)
 	}
-	ev := workflow.Event{Name: "pull_request", Repo: req.Repo, Branch: req.Base}
+	ev := workflow.Event{Name: "pull_request", Repo: req.Repo, Branch: req.Base, PR: req.PR, HeadBranch: req.HeadBranch}
 	if r.Options.PathFilters && req.Base != "" {
 		if _, err := m.FetchBranch(ctx, req.Base); err != nil {
 			return Submission{}, err
@@ -440,10 +442,13 @@ func newID() string {
 // commit tested and what decides whether a result can be reused.
 type headInfo struct {
 	forge.Head
-	Merge     string `json:"merge,omitempty"`
-	Tree      string `json:"tree"`
-	Toolchain string `json:"toolchain,omitempty"`
-	Reuse     string `json:"reuse,omitempty"`
+	// HeadBranch is the pull request's head branch, kept so a retry plans the
+	// same github.head_ref.
+	HeadBranch string `json:"headBranch,omitempty"`
+	Merge      string `json:"merge,omitempty"`
+	Tree       string `json:"tree"`
+	Toolchain  string `json:"toolchain,omitempty"`
+	Reuse      string `json:"reuse,omitempty"`
 }
 
 func (h headInfo) json() json.RawMessage {
