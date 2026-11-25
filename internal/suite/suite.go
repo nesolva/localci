@@ -236,8 +236,10 @@ func Parse(name string, n *yaml.Node) (*Suite, error) {
 				return fail("database: the command driver needs create and drop commands")
 			}
 		case "postgres":
-			if db.URL == "" && db.Container == "" {
-				return fail("database: the postgres driver needs url or container")
+			// The seed and the stack reach the database through its URL; a
+			// container only runs createdb and psql.
+			if db.URL == "" {
+				return fail("database.url: the postgres driver needs the URL the seed and the stack connect to, like postgres://postgres:postgres@127.0.0.1:5432/postgres")
 			}
 		default:
 			return fail("database.driver: %q is not known (use postgres or command)", db.Driver)
