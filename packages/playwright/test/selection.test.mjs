@@ -15,7 +15,7 @@ const playwright = require.resolve("@playwright/test/cli", { paths: [fixture] })
 
 const list = (config) => listTests(["-c", config], fixture);
 const pick = (listed, project, title) => {
-  const t = listed.find((l) => l.project === project && l.title === title);
+  const t = listed.find((l) => l.project === project && l.titles.at(-1) === title);
   assert.ok(t, `listed: ${project} ${title}`);
   return t;
 };
@@ -40,7 +40,14 @@ const given = (tests) => tests.map((t) => ({ test: t.test, title: t.title })).so
 
 test("a shard runs the tagged tests it was given: config, describe and test tags", () => {
   const listed = list("tagged.config.js");
-  const tests = [pick(listed, "", "plain"), pick(listed, "", "tagged"), pick(listed, "", "checkout › refunds")];
+  const tests = [pick(listed, "", "plain"), pick(listed, "", "tagged"), pick(listed, "", "refunds")];
   const { ran, output } = runShard("tagged.config.js", tests);
+  assert.deepEqual(ran, given(tests), output.slice(-800));
+});
+
+test("a shard runs tests inside an anonymous describe and reports them with their listed ids", () => {
+  const listed = list("playwright.config.js");
+  const tests = [pick(listed, "", "inside an anonymous describe"), pick(listed, "", "inside an empty title")];
+  const { ran, output } = runShard("playwright.config.js", tests);
   assert.deepEqual(ran, given(tests), output.slice(-800));
 });

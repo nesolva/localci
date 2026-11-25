@@ -55,7 +55,8 @@ export function listTests(args: string[] = [], cwd = process.cwd()): ListedTest[
         });
       }
     }
-    for (const child of s.suites ?? []) walk(child, [...describes, child.title]);
+    // An anonymous describe (no title, or "") is not part of a test's title path, as the reporter sees it.
+    for (const child of s.suites ?? []) walk(child, child.title ? [...describes, child.title] : describes);
   };
   // Top-level suites are files: their title is the file name, not a describe block.
   for (const file of json.suites) walk(file, []);
