@@ -45,6 +45,9 @@ Inside `env`, `run`, `ready` and database commands:
 | `{{db.url}}` | this shard's database (a connection URL for Postgres, the file for the `command` driver). In a shell command, quote it (`'{{db.url}}'`): on macOS the file is under `Application Support`, which has a space |
 | `{{template}}`, `{{name}}` | in the `command` driver's `create`, `drop` and `snapshot`: the template and the database being made or dropped |
 
+`database.template.seed` and `database.url` belong to the run, not to a shard: `{{port}}` is refused there when the
+configuration loads. In the seed, `{{db.url}}` is the template being filled; `database.url` cannot use it.
+
 ## In your Playwright project
 
 - Wrap the config: `export default withLocalci(defineConfig({ ... }))` with `withLocalci` from

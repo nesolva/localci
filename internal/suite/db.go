@@ -41,7 +41,7 @@ func (ex *execution) setupDB() error {
 			if d.URL == "" {
 				return filepath.Join(dbDir, name), nil
 			}
-			return env{dbName: name}.expand(d.URL)
+			return dbEnv(name, "", ex.dir).expand(d.URL)
 		}
 	case "postgres":
 		pg := &shard.Postgres{URL: d.URL, Container: d.Container, User: d.User, LockDir: shard.LockDir(ex.r.d.DataDir)}
@@ -75,7 +75,7 @@ func (ex *execution) setupDB() error {
 		if err != nil {
 			return err
 		}
-		cmd, err := env{dbName: name, dbURL: url}.expand(d.Template.Seed)
+		cmd, err := dbEnv(name, url, ex.dir).expand(d.Template.Seed)
 		if err != nil {
 			return err
 		}

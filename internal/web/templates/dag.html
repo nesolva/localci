@@ -19,7 +19,7 @@
           <span class="n-meta">{{.Meta}}</span>
           <i class="n-bar"><i style="width:{{pct .Bar}}"></i></i>
         </button>
-        {{if .Tests}}<span class="n-tests">{{range .Tests}}<a class="d {{.Class}}" href="/runs/{{$.R.ID}}/tests/{{.ID}}" data-tip="{{.Title}}" aria-label="{{.Title}}"></a>{{end}}</span>{{end}}
+        {{if .Tests}}<span class="n-tests">{{range .Tests}}<a class="d {{.Class}}" href="/runs/{{$.R.ID}}/tests/{{seg .ID}}" data-tip="{{.Title}}" aria-label="{{.Title}}"></a>{{end}}</span>{{end}}
         {{if .More}}<span class="n-more small muted">+{{.More}} more tests</span>{{end}}
       </div>
       {{end}}

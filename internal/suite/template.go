@@ -68,16 +68,28 @@ func (e env) resolve(tok string) (val string, keep bool, err error) {
 		if arg == "" {
 			return "", false, fmt.Errorf(`{{port}} needs a name: {{port "api"}}`)
 		}
+		if e.port == nil {
+			return "", false, fmt.Errorf(`{{port %q}} has no value here: a port belongs to a shard`, arg)
+		}
 		p, err := e.port(arg)
 		return fmt.Sprint(p), false, err
 	case "dir":
 		if arg == "" {
 			return "", false, fmt.Errorf(`{{dir}} needs a repository: {{dir "acme/api"}}`)
 		}
+		if e.dir == nil {
+			return "", false, fmt.Errorf(`{{dir %q}} has no value here`, arg)
+		}
 		d, err := e.dir(arg)
 		return d, false, err
 	}
 	return "", false, fmt.Errorf("unknown placeholder {{%s}}", tok)
+}
+
+// dbEnv is what database.url and database.template.seed may use: the database and the run's checkouts. The
+// template is built outside any shard, so there is no port.
+func dbEnv(name, url string, dir func(repo string) (string, error)) env {
+	return env{dbName: name, dbURL: url, dir: dir}
 }
 
 // checkTemplates expands every templated string once with stand-in values, so a typo fails when the
@@ -92,12 +104,13 @@ func (s *Suite) checkTemplates() error {
 			return "/", nil
 		},
 	}
-	check := func(where, v string) error {
-		if _, err := dry.expand(v); err != nil {
+	checkIn := func(e env, where, v string) error {
+		if _, err := e.expand(v); err != nil {
 			return fmt.Errorf("%s: %w", where, err)
 		}
 		return nil
 	}
+	check := func(where, v string) error { return checkIn(dry, where, v) }
 	for _, sv := range s.Stack {
 		for where, v := range map[string]string{"stack " + sv.Name + ".run": sv.Run, "stack " + sv.Name + ".ready.http": sv.Ready.HTTP,
 			"stack " + sv.Name + ".ready.tcp": sv.Ready.TCP} {
@@ -120,10 +133,10 @@ func (s *Suite) checkTemplates() error {
 		}
 	}
 	if d := s.Database; d != nil {
-		if err := check("database.url", d.URL); err != nil {
+		if err := checkIn(dbEnv("db", "", dry.dir), "database.url", d.URL); err != nil {
 			return err
 		}
-		if err := check("database.template.seed", d.Template.Seed); err != nil {
+		if err := checkIn(dbEnv("db", "db", dry.dir), "database.template.seed", d.Template.Seed); err != nil {
 			return err
 		}
 	}

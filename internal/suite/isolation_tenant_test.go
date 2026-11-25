@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nesolva/localci/internal/sched"
 	"github.com/nesolva/localci/internal/store"
 )
 
@@ -320,5 +321,24 @@ func TestTenantStackThatDoesNotStartLeavesNoDatabase(t *testing.T) {
 	}
 	if left := g.dbFiles(); len(left) != 0 {
 		t.Fatalf("databases left after the run: %v", left)
+	}
+}
+
+// With `shards: auto` a tenant run counts its shards with the stack paid once, which fits more of them than an
+// isolated count. All of them run here against the one stack, even with workers to hand shards to.
+func TestAutoTenantShardsAllRunHere(t *testing.T) {
+	yaml := strings.Replace(fakeSuite(tenantKeys), "    shards: 2\n", "    shards: auto\n", 1)
+	g := newRig(t, yaml, []string{"pass1", "pass2", "pass3", "pass4"}, 4)
+	g.r.d.Sched = sched.New(4, 3<<30) // two isolated shards of 1.5 GiB fit, three tenant ones do
+	fr := &fakeRemote{t: t, slots: 1}
+	g.r.d.Remote = fr
+
+	run := g.run(Request{Suite: "e2e", Heads: mainHead()})
+	if jobs := fr.jobsSnapshot(); len(jobs) != 0 {
+		t.Fatalf("%d tenant shard(s) went to a worker, want every shard here", len(jobs))
+	}
+	g.mustPass(run)
+	if ev := isolationEvent(t, g, run.ID); ev == nil || ev["level"] != "tenant" || ev["shared_shards"] != float64(3) {
+		t.Fatalf("run.isolation = %v, want tenant on 3 shards", ev)
 	}
 }

@@ -102,7 +102,7 @@ func (s *server) runPage(w http.ResponseWriter, r *http.Request, tab string) {
 	sel := attemptParam(r)
 	var lanes []lane
 	if data.hasSteps() {
-		lanes = data.timeLanes(sel, v.Active, run.Started)
+		lanes = data.timeLanes(sel, v.Active, run, s.now().UnixMilli())
 	} else { // steps stored without events (older runs)
 		sl, err := s.st.Timeline(ctx, run.ID)
 		if err != nil {
@@ -292,8 +292,8 @@ func (s *server) layout(lanes []lane, byID map[string]store.Test, serial map[str
 
 	var ticks []tick
 	step := niceStep(total)
-	for ms := int64(0); ms <= total; ms += step {
-		ticks = append(ticks, tick{Left: pct(ms), Label: fmtMS(ms)})
+	for i := int64(0); i <= total/step; i++ { // counted, so a long span can neither add ticks nor overflow
+		ticks = append(ticks, tick{Left: pct(i * step), Label: fmtMS(i * step)})
 	}
 	return out, ticks
 }

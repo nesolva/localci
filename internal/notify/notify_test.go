@@ -145,3 +145,42 @@ func TestDescribeInfrastructureFailure(t *testing.T) {
 		t.Errorf("%+v", m)
 	}
 }
+
+// A run that failed on timeouts or interruptions failed those tests: the banner counts them as the dashboard and
+// the pull request status do.
+func TestWatchCountsTimedOutAndInterruptedTestsAsFailed(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	st, err := store.Open(filepath.Join(t.TempDir(), "localci.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	bus := event.NewBus()
+	log := event.NewLog(st, bus)
+	rec := recorder{got: make(chan Message, 8)}
+	go Watch(ctx, st, bus, []string{"failed"}, rec, nil, t.Logf)
+	time.Sleep(50 * time.Millisecond) // Watch starts following from the log's end
+
+	now := time.Now().UnixMilli()
+	if err := st.PutRun(ctx, store.Run{ID: "5", Suite: "e2e", Kind: store.KindSuite, Trigger: "manual",
+		State: store.StateFailed, Created: now - 90_000, Started: now - 80_000, Finished: now}); err != nil {
+		t.Fatal(err)
+	}
+	for id, status := range map[string]string{"a": "passed", "b": "timedOut", "c": "interrupted"} {
+		if err := st.PutTest(ctx, store.Test{Run: "5", Shard: 1, ID: id, Title: id, Status: status}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := log.Append(ctx, store.Event{Run: "5", Kind: "run.state", Data: []byte(`{"state":"failed"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case m := <-rec.got:
+		if !strings.Contains(m.Body, "2 of 3 tests failed") {
+			t.Errorf("banner %q, want it to say 2 of 3 tests failed", m.Body)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the failed run did not notify")
+	}
+}

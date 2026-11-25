@@ -120,7 +120,10 @@ func (d *Dispatcher) report(ctx context.Context, id, name string, heads []forge.
 	url := d.URL(id)
 	// The runner does not say where a run stands in line, so the description does not claim a number.
 	post(forge.Status{Suite: name, State: forge.StatePending, TargetURL: url, Description: "queued"})
-	evs := event.Subscribe(ctx, d.Store, d.Bus, max(since-1, 0))
+	// The subscription lives as long as this report, not as long as serve.
+	sub, stop := context.WithCancel(ctx)
+	defer stop()
+	evs := event.Subscribe(sub, d.Store, d.Bus, max(since-1, 0))
 	for e := range evs {
 		if e.Run != id || e.Kind != "run.state" {
 			continue

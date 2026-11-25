@@ -39,7 +39,7 @@ git add -A && git commit -qm sample
 # localci clones repositories from GitHub. Point the sample's made-up address at this folder instead:
 git config --global url."$PWD".insteadOf https://github.com/acme/shop.git
 
-mkdir -p ~/.config/localci && cp localci.yaml ~/.config/localci/config.yaml
+export LOCALCI_CONFIG="$PWD/localci.yaml"   # the sample's config; a config you already have stays untouched
 localci serve &                      # the server every command talks to; dashboard at http://127.0.0.1:7357
 localci run --wait                   # four shards of the sample suite
 ```
@@ -53,7 +53,7 @@ localci triage 2                     # product bug, test bug, flaky or infrastru
 localci run --failed 2 --wait        # only what failed
 ```
 
-When you are done: stop `localci serve` and remove the redirect with
+When you are done: stop `localci serve`, `unset LOCALCI_CONFIG`, and remove the redirect with
 `git config --global --unset url."<the folder you used>".insteadOf`.
 
 ## Your own project

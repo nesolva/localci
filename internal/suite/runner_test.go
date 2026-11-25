@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/nesolva/localci/internal/store"
 	_ "modernc.org/sqlite"
@@ -226,6 +227,23 @@ func TestFailedCloneDropsNothing(t *testing.T) {
 	}
 }
 
+// The template seed may read the run's checkouts: {{dir "repo"}} is where the repository is checked out.
+func TestTemplateSeedReadsTheCheckout(t *testing.T) {
+	yaml := strings.Replace(fakeSuite(""), `seed: "echo seeded > {{db.url}}"`,
+		`seed: 'cp {{dir "acme/web"}}/seed.sql {{db.url}}'`, 1)
+	g := newRig(t, yaml, []string{"pass1"}, 4)
+	g.commit(map[string]string{"seed.sql": "insert into acme\n"})
+	g.mustPass(g.run(Request{Suite: "e2e", Heads: mainHead()}))
+
+	tpl, _ := filepath.Glob(filepath.Join(g.data, "state", "e2e", "db", "localci_tpl_*"))
+	if len(tpl) != 1 {
+		t.Fatalf("templates = %v, want one", tpl)
+	}
+	if b, _ := os.ReadFile(tpl[0]); string(b) != "insert into acme\n" {
+		t.Fatalf("template holds %q, want the checkout's seed.sql", b)
+	}
+}
+
 func TestPrepareRunsOnlyWhenItsKeyChanges(t *testing.T) {
 	prep := `    prepare:
       - repo: acme/web
@@ -297,6 +315,41 @@ func TestNewerRequestForTheSamePRSupersedes(t *testing.T) {
 	}
 }
 
+// A run still queued behind another pull request's run ends as superseded when a newer request for its pull
+// request arrives: whoever waits on it gets its end, and the newer run still runs.
+func TestNewerRequestSupersedesAQueuedRun(t *testing.T) {
+	g := newRig(t, fakeSuite(""), []string{"hang1", "pass1"}, 4)
+	git(t, g.src, "update-ref", "refs/pull/5/head", "HEAD")
+	git(t, g.src, "update-ref", "refs/pull/7/head", "HEAD")
+
+	busy, err := g.r.Submit(Request{Suite: "e2e", Heads: prHead(7)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the other pull request's run to hang", func() bool { return len(pidsIn(filepath.Join(g.shared, "pids"))) > 0 })
+	only := Filter{IDs: []string{"pass1"}}
+	queued, err := g.r.Submit(Request{Suite: "e2e", Heads: prHead(5), Tests: only})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer, err := g.r.Submit(Request{Suite: "e2e", Heads: prHead(5), Tests: only})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	run, err := g.r.Wait(ctx, queued)
+	if err != nil {
+		t.Fatalf("waiting on the superseded queued run: %v", err)
+	}
+	if run.State != store.StateCancelled || run.Reason != "superseded" {
+		t.Fatalf("queued run = %s (%s), want cancelled (superseded)", run.State, run.Reason)
+	}
+	g.r.Cancel(busy)
+	g.mustPass(g.wait(newer))
+}
+
 func TestTimeoutFailsTheRunAndStopsEverything(t *testing.T) {
 	g := newRig(t, fakeSuite("    timeout: 4s\n"), []string{"hang1"}, 4)
 	run := g.run(Request{Suite: "e2e", Heads: mainHead()})
@@ -332,6 +385,10 @@ func TestFiltersChooseTheTests(t *testing.T) {
 		{"ids", Filter{IDs: []string{"pay1", "login2"}}, []string{"login2", "pay1"}},
 		{"grep", Filter{Grep: "^t/login"}, []string{"login1", "login2"}},
 		{"files", Filter{Files: []string{"t/pay1.spec"}}, []string{"pay1"}},
+		// The runner lists files relative to its own test dir; people type them from the repo root, or absolute.
+		{"file from the repo root", Filter{Files: []string{"e2e/t/pay1.spec"}}, []string{"pay1"}},
+		{"absolute file", Filter{Files: []string{"/home/me/shop/e2e/t/pay1.spec"}}, []string{"pay1"}},
+		{"directory from the repo root", Filter{Files: []string{"e2e/t/"}}, []string{"broken1", "login1", "login2", "pay1"}},
 		{"ids and grep must both match", Filter{IDs: []string{"pay1", "login1"}, Grep: "login"}, []string{"login1"}},
 	}
 	for _, c := range cases {

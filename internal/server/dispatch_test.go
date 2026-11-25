@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	osexec "os/exec"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -154,5 +156,45 @@ func TestInfraRunPostsErrorNotFailure(t *testing.T) {
 	last := got[len(got)-1].st
 	if last.State != forge.StateError || !strings.HasPrefix(last.Description, "infrastructure:") {
 		t.Fatalf("last status = %+v, want error starting with \"infrastructure:\"", last)
+	}
+}
+
+// subscribers counts the goroutines following the event log.
+func subscribers() int {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			return strings.Count(string(buf[:n]), "event.Subscribe.func")
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+}
+
+// A report ends with its run; what it followed the run with must end too, or every pull request run leaves a
+// goroutine and a bus slot behind for the life of serve.
+func TestFinishedReportsLeaveNoSubscriptionBehind(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	st := openStore(t)
+	bus := event.NewBus()
+	elog := event.NewLog(st, bus)
+	d := &Dispatcher{Forge: &recordForge{}, Store: st, Bus: bus, URL: func(id string) string { return "http://x/runs/" + id }}
+
+	before := subscribers()
+	for i := range 20 {
+		id := strconv.Itoa(i + 1)
+		since, _ := st.LastSeq(ctx)
+		st.PutRun(ctx, store.Run{ID: id, Suite: "e2e", Kind: store.KindSuite, State: store.StatePassed})
+		data, _ := json.Marshal(map[string]string{"state": store.StatePassed})
+		elog.Append(ctx, store.Event{Run: id, Kind: "run.state", Data: data})
+		d.report(ctx, id, "e2e", []forge.Head{{Repo: "acme/web", SHA: "abc", PR: 1}}, since)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for subscribers() > before && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if left := subscribers() - before; left > 0 {
+		t.Fatalf("%d of 20 finished reports still follow the event log", left)
 	}
 }

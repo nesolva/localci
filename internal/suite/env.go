@@ -95,13 +95,16 @@ func (e *shardEnv) templ() env {
 			e.portList = append(e.portList, ps[0])
 			return ps[0], nil
 		},
-		dir: func(repo string) (string, error) {
-			if d, ok := e.ex.dirs[repo]; ok {
-				return d, nil
-			}
-			return "", fmt.Errorf("{{dir %q}}: repository is not in the suite", repo)
-		},
+		dir: e.ex.dir,
 	}
+}
+
+// dir resolves {{dir "repo"}}: where the run checked the repository out.
+func (ex *execution) dir(repo string) (string, error) {
+	if d, ok := ex.dirs[repo]; ok {
+		return d, nil
+	}
+	return "", fmt.Errorf("{{dir %q}}: repository is not in the suite", repo)
 }
 
 // coreEnv is what every process of the shard gets; it wins over the suite's own env.

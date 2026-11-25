@@ -11,6 +11,8 @@ export interface ListedTest {
   line: number;
   project: string;
   titles: string[];
+  /** Every tag the test carries (from the config, its describes and its own details or title), with the `@`. */
+  tags: string[];
 }
 
 /** Set in the child process so a config that calls `withLocalci` does not list again. */
@@ -20,7 +22,7 @@ interface JsonSuite {
   title: string;
   file?: string;
   line?: number;
-  specs?: { title: string; file: string; line: number; tests: { projectName: string }[] }[];
+  specs?: { title: string; file: string; line: number; tags?: string[]; tests: { projectName: string }[] }[];
   suites?: JsonSuite[];
 }
 
@@ -48,10 +50,13 @@ export function listTests(args: string[] = [], cwd = process.cwd()): ListedTest[
           line: spec.line,
           project: t.projectName,
           titles,
+          // The JSON report drops the `@`.
+          tags: (spec.tags ?? []).map((tag) => `@${tag}`),
         });
       }
     }
-    for (const child of s.suites ?? []) walk(child, [...describes, child.title]);
+    // An anonymous describe (no title, or "") is not part of a test's title path, as the reporter sees it.
+    for (const child of s.suites ?? []) walk(child, child.title ? [...describes, child.title] : describes);
   };
   // Top-level suites are files: their title is the file name, not a describe block.
   for (const file of json.suites) walk(file, []);

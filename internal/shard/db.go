@@ -223,7 +223,7 @@ var fileLock = flock.Lock
 // lockIn is lock for builds that another localci process may run too: with a
 // dir, a file lock there makes two processes take turns like two goroutines do,
 // so the second finds the first one's result. Without a dir, or where the
-// filesystem cannot lock files (NFS: ENOLCK, ENOTSUP), only this process is
+// filesystem cannot lock files (NFS: ENOLCK, ENOTSUP; darwin also EOPNOTSUPP), only this process is
 // serialised, as it was before the file lock existed. Any other lock error
 // fails the caller, naming the lock file: carrying on unlocked would let two
 // processes build the same thing at once.
@@ -239,7 +239,7 @@ func (o *onceMap) lockIn(ctx context.Context, dir, key string) (func(), error) {
 			unlockMem()
 			return nil, ctx.Err()
 		}
-		if errors.Is(err, syscall.ENOLCK) || errors.Is(err, syscall.ENOTSUP) {
+		if errors.Is(err, syscall.ENOLCK) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EOPNOTSUPP) {
 			return unlockMem, nil
 		}
 		unlockMem()

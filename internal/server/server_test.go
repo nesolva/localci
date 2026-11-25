@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"io"
@@ -328,3 +329,48 @@ func TestBadSinceIsAUsageError(t *testing.T) {
 }
 
 func itoa(n int64) string { b, _ := json.Marshal(n); return string(b) }
+
+// A log line longer than a line reader's buffer (a minified bundle, a JSON dump) must not hide the end of the log:
+// the tail is the last lines of the file, and a client reading them line by line, as `localci logs` does, gets
+// through to the last one.
+func TestLogTailReachesTheEndPastAVeryLongLine(t *testing.T) {
+	r := newRig(t)
+	ctx := t.Context()
+	path := t.TempDir() + "/shard-1.log"
+	body := "first\n" + strings.Repeat("x", 2<<20) + "\nafter 1\nafter 2\nError: the end\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.st.PutRun(ctx, store.Run{ID: "7", Suite: "e2e", Kind: store.KindSuite, State: store.StateFailed}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.st.PutShard(ctx, store.Shard{Run: "7", N: 1, State: store.StateFailed, LogPath: path}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		tail string
+		want []string
+	}{
+		{"3", []string{"after 1", "after 2", "Error: the end"}},
+		{"10", []string{"first", "x", "after 1", "after 2", "Error: the end"}},
+	} {
+		resp := do(t, "GET", r.tcp.URL+"/api/runs/7/log?tail="+tc.tail, "", "")
+		var got []string
+		sc := bufio.NewScanner(resp.Body)
+		sc.Buffer(make([]byte, 64*1024), 1<<20) // what `localci logs` reads with
+		for sc.Scan() {
+			l := sc.Text()
+			if strings.HasPrefix(l, "xxx") {
+				l = "x" // the long line, whole or cut
+			}
+			got = append(got, l)
+		}
+		if err := sc.Err(); err != nil {
+			t.Errorf("tail=%s: a line reader stops at %v after %q", tc.tail, err, got)
+			continue
+		}
+		if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+			t.Errorf("tail=%s: got %q, want %q", tc.tail, got, tc.want)
+		}
+	}
+}

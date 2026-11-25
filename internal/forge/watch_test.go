@@ -6,9 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/nesolva/localci/internal/capacity"
+	"github.com/nesolva/localci/internal/config"
 )
 
 // The token goes to the API host only, whatever a Link header points at.
@@ -101,6 +106,73 @@ func TestWatchPollsWithETagAndEmitsOncePerHeadAndLabel(t *testing.T) {
 	f.set("acme/api", pr(1, "bbb", "e2e")) // ... and added again
 	g.pollOnce(context.Background(), emit)
 	eq(t, got, "label:bbb")
+}
+
+// A suite's `trigger.label` may name any label: the watcher built from the configuration reports each suite's label
+// when it is added, spelled as the configuration spells it (the dispatcher compares it as is).
+func TestWatchReportsEverySuitesConfiguredLabel(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	yml := `version: 1
+repos:
+  - name: acme/api
+    checks: false
+suites:
+  full:
+    repos: [acme/api]
+    trigger: {label: run-e2e}
+  nightly:
+    repos: [acme/api]
+    trigger: {push: true, label: Nightly}
+  smoke:
+    repos: [acme/api]
+    trigger: {push: true}
+    test: {repo: acme/api, run: make smoke}
+`
+	if err := os.WriteFile(path, []byte(yml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	eff, err := config.Load(config.Options{Path: path, Env: func(string) string { return "" }, Machine: capacity.Machine{CPUs: 4}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newFake(t)
+	f.set("acme/api", pr(1, "aaa"))
+	g := f.client(OptionsFromConfig(&eff.Config, "token"), &fakeClock{now: t0})
+	var got []Trigger
+	emit := func(tr Trigger) error { got = append(got, tr); return nil }
+	labels := func() []string {
+		var out []string
+		for _, tr := range got {
+			if tr.Kind == KindLabel {
+				out = append(out, tr.Label)
+			}
+		}
+		return out
+	}
+
+	g.pollOnce(context.Background(), emit)
+	got = nil
+	f.set("acme/api", pr(1, "aaa", "nightly", "e2e")) // GitHub matches labels without case
+	g.pollOnce(context.Background(), emit)
+	if l := labels(); len(l) != 1 || l[0] != "Nightly" {
+		t.Fatalf("label triggers %v, want [Nightly]", l)
+	}
+
+	got = nil
+	f.set("acme/api", pr(1, "aaa", "nightly", "e2e", "run-e2e")) // a second suite's label, the first one still on
+	g.pollOnce(context.Background(), emit)
+	if l := labels(); len(l) != 1 || l[0] != "run-e2e" {
+		t.Fatalf("label triggers %v, want [run-e2e]", l)
+	}
+
+	got = nil
+	f.set("acme/api", pr(1, "aaa", "run-e2e")) // Nightly removed ...
+	g.pollOnce(context.Background(), emit)
+	f.set("acme/api", pr(1, "aaa", "run-e2e", "Nightly")) // ... and added again
+	g.pollOnce(context.Background(), emit)
+	if l := labels(); len(l) != 1 || l[0] != "Nightly" {
+		t.Fatalf("label triggers %v, want [Nightly] once", l)
+	}
 }
 
 // GitHub's pull request refs can lag behind the head the list shows: a handler

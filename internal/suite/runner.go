@@ -212,15 +212,16 @@ func (r *Runner) Submit(req Request) (string, error) {
 		q = &suiteQueue{}
 		r.queues[s.Name] = q
 	}
-	var superseded []*job
+	var running *job    // superseded while running: it finishes itself
+	var dequeued []*job // superseded before starting: off the queue here, finished below
 	if key := supersedeKey(req); key != "" {
 		if q.running != nil && supersedeKey(q.running.req) == key {
-			superseded = append(superseded, q.running)
+			running = q.running
 		}
 		kept := q.waiting[:0]
 		for _, w := range q.waiting {
 			if supersedeKey(w.req) == key {
-				superseded = append(superseded, w)
+				dequeued = append(dequeued, w)
 			} else {
 				kept = append(kept, w)
 			}
@@ -233,8 +234,11 @@ func (r *Runner) Submit(req Request) (string, error) {
 	q.working = true
 	r.mu.Unlock()
 
-	for _, old := range superseded {
-		r.stopJob(old, causeSuperseded)
+	if running != nil {
+		r.stopJob(running, causeSuperseded)
+	}
+	for _, old := range dequeued {
+		r.endQueued(old, causeSuperseded)
 	}
 	if start {
 		r.wg.Add(1)
@@ -263,14 +267,24 @@ func (r *Runner) stopJob(j *job, cause stopCause) {
 	idx := slices.Index(q.waiting, j)
 	if idx >= 0 {
 		q.waiting = slices.Delete(q.waiting, idx, idx+1)
-		delete(r.jobs, j.id)
 	}
 	r.mu.Unlock()
-	j.cancel(cause)
 	if idx >= 0 {
-		r.finishRun(j.id, store.StateCancelled, string(cause))
-		close(j.done)
+		r.endQueued(j, cause)
+		return
 	}
+	j.cancel(cause)
+}
+
+// endQueued finishes a job that was taken off its queue before it started. It stays known until its state is
+// stored, so a Wait in between does not read it as still queued.
+func (r *Runner) endQueued(j *job, cause stopCause) {
+	j.cancel(cause)
+	r.finishRun(j.id, store.StateCancelled, string(cause))
+	r.mu.Lock()
+	delete(r.jobs, j.id)
+	r.mu.Unlock()
+	close(j.done)
 }
 
 // work runs a suite's queue, one run at a time.

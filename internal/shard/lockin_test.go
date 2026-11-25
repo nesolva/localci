@@ -14,7 +14,7 @@ import (
 // Some filesystems (NFS, some FUSE mounts) cannot lock files. Building must still work there, with the builds of
 // one process serialised, as it did before the file lock existed.
 func TestLockInSerialisesInProcessWhereFileLocksAreUnsupported(t *testing.T) {
-	for _, errno := range []error{syscall.ENOLCK, syscall.ENOTSUP} {
+	for _, errno := range []error{syscall.ENOLCK, syscall.ENOTSUP, syscall.EOPNOTSUPP} { // darwin: EOPNOTSUPP != ENOTSUP
 		old := fileLock
 		fileLock = func(context.Context, string) (func(), error) { return nil, errno }
 		t.Cleanup(func() { fileLock = old })

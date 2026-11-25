@@ -110,15 +110,56 @@ func applyFixes(e *env, id string, rep server.TriageReport, tests []server.Triag
 		fmt.Fprintf(e.err, "localci: run %s has no proposed fix to apply\n", id)
 		return exitFailed
 	}
+	// Every patch is checked before any is applied, and they go in one `git apply`, which changes nothing unless
+	// all of them fit. Tests can share a patch (one spec under two projects, a locator in a beforeEach): once is enough.
+	ctx := context.Background()
 	cwd, _ := os.Getwd()
+	var root string
+	var all bytes.Buffer
+	var applied []server.TriageTest
+	seen := map[string]bool{}
 	for _, t := range fixes {
-		if err := triage.Apply(context.Background(), cwd, *t.Patch, rep.Fork); err != nil {
+		diff, r, err := triage.Check(ctx, cwd, *t.Patch, rep.Fork)
+		if err != nil {
 			return refuse(e, err)
 		}
+		if seen[string(diff)] {
+			continue
+		}
+		seen[string(diff)] = true
+		root = r
+		all.Write(diff)
+		if !bytes.HasSuffix(diff, []byte("\n")) {
+			all.WriteByte('\n')
+		}
+		applied = append(applied, t)
+	}
+	if err := gitApply(ctx, root, all.Bytes()); err != nil {
+		if len(applied) > 1 {
+			err = triage.Refusal(fmt.Sprintf("the %d fixes overlap and do not apply together: apply one at a time with --test <id>",
+				len(applied)))
+		}
+		return refuse(e, err)
+	}
+	for _, t := range applied {
 		fmt.Fprintf(e.out, "applied: %s → %s in %s (working tree only, nothing committed)\n",
 			quoteText(t.Patch.From), quoteText(t.Patch.To), printable(t.Patch.File))
 	}
 	return exitOK
+}
+
+// gitApply applies diff to the working tree of the checkout at root; it changes nothing when any part fails.
+func gitApply(ctx context.Context, root string, diff []byte) error {
+	cmd := osexec.CommandContext(ctx, "git", "apply", "-")
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+	cmd.Stdin = bytes.NewReader(diff)
+	var b bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &b, &b
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git apply: %s", strings.TrimSpace(b.String()))
+	}
+	return nil
 }
 
 func refuse(e *env, err error) int {

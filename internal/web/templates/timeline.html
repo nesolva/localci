@@ -34,7 +34,7 @@
       <span class="label">{{.Label}}</span>
       <div class="track">
         {{range $.Ticks}}<i class="grid" style="left:{{pct .Left}}"></i>{{end}}
-        {{range .Tests}}<a class="test {{.Class}}" style="left:{{pct .Left}};width:{{pct .Width}}" data-tip="{{.Tip}}" href="/runs/{{$.R.ID}}/tests/{{.ID}}" aria-label="{{.Tip}}">{{range .Steps}}<i class="step {{.Class}}" style="left:{{pct .Left}};width:{{pct .Width}}" data-tip="{{.Tip}}"{{if .Flows}} data-flows="{{.Flows}}"{{end}}></i>{{end}}</a>{{end}}
+        {{range .Tests}}<a class="test {{.Class}}" style="left:{{pct .Left}};width:{{pct .Width}}" data-tip="{{.Tip}}" href="/runs/{{$.R.ID}}/tests/{{seg .ID}}" aria-label="{{.Tip}}">{{range .Steps}}<i class="step {{.Class}}" style="left:{{pct .Left}};width:{{pct .Width}}" data-tip="{{.Tip}}"{{if .Flows}} data-flows="{{.Flows}}"{{end}}></i>{{end}}</a>{{end}}
       </div>
     </div>
     {{end}}
@@ -50,7 +50,7 @@
   <ul class="rows">
   {{range .Failures}}
     <li class="row is-failed"><i class="dot s-failed" aria-hidden="true"></i>
-      <a class="grow" href="/runs/{{$.R.ID}}/tests/{{.ID}}"><b>{{.Title}}</b><span class="msg">{{if .Step}}{{.Step}} — {{end}}{{.Message}}</span></a>
+      <a class="grow" href="/runs/{{$.R.ID}}/tests/{{seg .ID}}"><b>{{.Title}}</b><span class="msg">{{if .Step}}{{.Step}} — {{end}}{{.Message}}</span></a>
       {{if .Class}}<span class="tag">{{.Class}}</span>{{end}}</li>
   {{end}}
   </ul>

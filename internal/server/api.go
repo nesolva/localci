@@ -1,15 +1,18 @@
 package server
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nesolva/localci/internal/event"
 	"github.com/nesolva/localci/internal/store"
@@ -294,25 +297,56 @@ func (s *Server) log(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// tailLines returns the last n lines of f and the offset after the last byte read.
+const (
+	tailWindow = 8 << 20  // the most a tail reads from the end of a log
+	tailLine   = 64 << 10 // a longer line is cut, so a client reading the tail line by line never chokes on it
+)
+
+// tailLines returns the last n lines of f and the offset after the last byte read, where following resumes. It reads
+// backwards from the end, at most tailWindow bytes, so a log of any size or line length costs the same.
 func tailLines(f *os.File, n int) ([]string, int64) {
-	var ring []string
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 64*1024), 1<<20)
-	for sc.Scan() {
-		ring = append(ring, sc.Text())
-		if len(ring) > 2*n {
-			ring = ring[len(ring)-n:]
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, 0
+	}
+	end := fi.Size()
+	start, newlines := end, 0
+	var chunks [][]byte
+	for start > 0 && end-start < tailWindow && newlines <= n { // n lines need n+1 newlines: theirs and the one before
+		k := min(64<<10, start, tailWindow-(end-start))
+		b := make([]byte, k)
+		if _, err := f.ReadAt(b, start-k); err != nil {
+			break
+		}
+		start -= k
+		newlines += bytes.Count(b, []byte{'\n'})
+		chunks = append(chunks, b)
+	}
+	slices.Reverse(chunks)
+	text := string(bytes.Join(chunks, nil))
+	if start > 0 {
+		if i := strings.IndexByte(text, '\n'); i >= 0 {
+			text = text[i+1:] // the first line is cut in the middle
 		}
 	}
-	if len(ring) > n {
-		ring = ring[len(ring)-n:]
+	text = strings.TrimSuffix(text, "\n")
+	if text == "" {
+		return nil, end
 	}
-	off, _ := f.Seek(0, io.SeekCurrent)
-	if st, err := f.Stat(); err == nil {
-		off = st.Size()
+	lines := strings.Split(text, "\n")
+	lines = lines[max(len(lines)-n, 0):]
+	for i, l := range lines {
+		l = strings.TrimSuffix(l, "\r")
+		if len(l) > tailLine {
+			cut := tailLine
+			for cut > 0 && !utf8.RuneStart(l[cut]) {
+				cut--
+			}
+			l = l[:cut] + "…"
+		}
+		lines[i] = l
 	}
-	return ring, off
+	return lines, end
 }
 
 func (s *Server) queue(w http.ResponseWriter, r *http.Request) {

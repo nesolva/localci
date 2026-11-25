@@ -348,9 +348,9 @@ func newAttemptNav(r *http.Request, most, sel int) attemptNav {
 			q.Set("attempt", strconv.Itoa(n))
 		}
 		if len(q) == 0 {
-			return r.URL.Path
+			return r.URL.EscapedPath() // a test id may hold an escaped "/" or "#"
 		}
-		return r.URL.Path + "?" + q.Encode()
+		return r.URL.EscapedPath() + "?" + q.Encode()
 	}
 	nav := attemptNav{Q: q, Show: true, Items: []attemptItem{{Label: "Last", Href: href(0), Current: sel < 0}}}
 	for n := 1; n <= most; n++ {

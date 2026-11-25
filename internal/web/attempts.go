@@ -208,19 +208,33 @@ func (d *runData) hasSteps() bool {
 
 // timeLanes lays the chosen attempt of every test onto its shard's lane. Offsets are relative to the run's start,
 // or to the earliest step when none is known (all attempts count, so choosing another attempt never moves the axis).
-func (d *runData) timeLanes(sel int, active bool, runStarted int64) []lane {
+// Step times come from the test process, so each step is clamped to the run's window first: a step cannot begin
+// before the run was created nor last past its end (now, while it runs).
+func (d *runData) timeLanes(sel int, active bool, run store.Run, now int64) []lane {
+	lo, hi := run.Created, run.Finished
+	if active || hi <= 0 {
+		hi = now
+	}
+	if lo <= 0 || lo > hi {
+		lo = min(hi, run.Started)
+	}
+	clamp := func(st tstep) tstep {
+		st.Start = min(max(st.Start, lo), hi)
+		st.MS = min(max(st.MS, 0), hi-st.Start)
+		return st
+	}
 	base := int64(0)
 	for _, as := range d.attempts {
 		for _, a := range as {
 			for _, st := range a.Steps {
-				if base == 0 || st.Start < base {
-					base = st.Start
+				if start := clamp(*st).Start; base == 0 || start < base {
+					base = start
 				}
 			}
 		}
 	}
-	if runStarted > 0 && (base == 0 || runStarted < base) {
-		base = runStarted
+	if run.Started > 0 && (base == 0 || run.Started < base) {
+		base = run.Started
 	}
 	byShard := map[int]*lane{}
 	var shards []int
@@ -231,8 +245,8 @@ func (d *runData) timeLanes(sel int, active bool, runStarted int64) []lane {
 		}
 		latest := a == d.last(test)
 		for _, st := range a.Steps {
-			c := *st
-			c.Offset = st.Start - base
+			c := clamp(*st)
+			c.Offset = c.Start - base
 			c.Open = st.OK == nil && (!active || !latest)
 			l := byShard[a.Shard]
 			if l == nil {
