@@ -117,11 +117,12 @@ func cmdShow(e *env, args []string) int {
 	return exitOK
 }
 
-// failureText is the report of one failed test: at most 25 lines unless full.
+// failureText is the report of one failed test: at most 25 lines unless full. Everything in it but the shard
+// comes from the report the code under test wrote, so every such string goes through printable.
 func failureText(f server.Failure, full bool) []string {
 	cut := func(s string, n int) string {
 		if full {
-			return strings.Join(strings.Fields(s), " ")
+			return strings.Join(strings.Fields(printable(s)), " ")
 		}
 		return trim(s, n)
 	}
@@ -133,9 +134,9 @@ func failureText(f server.Failure, full bool) []string {
 		}
 	}
 	shard := shardName(f.Label, f.Shard)
-	first := fmt.Sprintf("✗ %s · %s · %s · %s", f.Title, where, shard, fmtDur(time.Duration(f.MS)*time.Millisecond))
+	first := fmt.Sprintf("✗ %s · %s · %s · %s", printable(f.Title), printable(where), shard, fmtDur(time.Duration(f.MS)*time.Millisecond))
 	if f.Class != "" {
-		first += " · class: " + f.Class
+		first += " · class: " + printable(f.Class)
 	}
 	lines := []string{first}
 
@@ -164,11 +165,11 @@ func failureText(f server.Failure, full bool) []string {
 		if !full && len(al) > ariaLines {
 			extra, al = len(al)-ariaLines, al[:ariaLines]
 		}
-		for i, l := range al {
+		for i, l := range al { // split first: printable makes a line break a space
 			if i == 0 {
-				lines = append(lines, "  aria: "+l)
+				lines = append(lines, "  aria: "+printable(l))
 			} else {
-				lines = append(lines, "        "+l)
+				lines = append(lines, "        "+printable(l))
 			}
 		}
 		if extra > 0 {
@@ -178,11 +179,11 @@ func failureText(f server.Failure, full bool) []string {
 
 	var net []string
 	for _, n := range f.Network {
-		net = append(net, fmt.Sprintf("%s %s %d", n.Method, n.URL, n.Status))
+		net = append(net, fmt.Sprintf("%s %s %d", printable(n.Method), printable(n.URL), n.Status))
 	}
 	if full {
 		for _, c := range f.Console {
-			lines = append(lines, "  console: "+strings.Join(strings.Fields(c), " "))
+			lines = append(lines, "  console: "+cut(c, 0))
 		}
 		for _, n := range net {
 			lines = append(lines, "  network: "+n)
@@ -207,7 +208,7 @@ func failureText(f server.Failure, full bool) []string {
 	var files []string
 	for _, p := range []string{f.Screenshot, f.Trace} {
 		if p != "" {
-			files = append(files, p)
+			files = append(files, printable(p))
 		}
 	}
 	if len(files) > 0 {
