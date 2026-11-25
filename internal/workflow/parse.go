@@ -58,15 +58,61 @@ func planWorkflow(repo, file string, data []byte, ev Event, sha string) ([]Check
 	wfEnv := resolveEnv(top["env"], base, &wfBad)
 	wfShell, wfDir := runDefaults(top["defaults"])
 
+	// A job is planned after the jobs it needs, so it knows which of them
+	// are skipped; the plan keeps the file's order.
+	jobKeys, jobs := mapPairs(top["jobs"])
+	type planned struct {
+		checks []Check
+		skips  []Skip
+	}
+	out := map[string]*planned{}
+	results := map[string]string{} // needs.<id>.result of every planned job
+	visiting := map[string]bool{}
+	var plan func(id string)
+	plan = func(id string) {
+		if out[id] != nil || visiting[id] {
+			return // planned, or a cycle GitHub rejects anyway
+		}
+		visiting[id] = true
+		_, j := mapPairs(jobs[id])
+		d := deps{results: map[string]string{}}
+		for _, n := range strList(j["needs"]) {
+			if jobs[n] == nil {
+				continue
+			}
+			plan(n)
+			d.results[n] = results[n]
+			if results[n] == "skipped" {
+				d.skipped = append(d.skipped, n)
+			}
+		}
+		c, s := planJob(repo, wfName, id, jobs[id], base, wfEnv, wfShell, wfDir, wfBad, d)
+		out[id] = &planned{c, s}
+		// A planned job is taken to pass, the way success() is.
+		results[id] = "success"
+		if len(c) == 0 {
+			results[id] = "skipped"
+		}
+	}
 	var checks []Check
 	var skips []Skip
-	jobKeys, jobs := mapPairs(top["jobs"])
 	for _, id := range jobKeys {
-		c, s := planJob(repo, wfName, id, jobs[id], base, wfEnv, wfShell, wfDir, wfBad)
-		checks = append(checks, c...)
-		skips = append(skips, s...)
+		plan(id)
+	}
+	for _, id := range jobKeys {
+		if p := out[id]; p != nil {
+			checks = append(checks, p.checks...)
+			skips = append(skips, p.skips...)
+		}
 	}
 	return checks, skips
+}
+
+// deps is what a job knows of the jobs it needs: their needs.<id>.result, and
+// those that are skipped.
+type deps struct {
+	results map[string]string
+	skipped []string
 }
 
 func resolveEnv(n *yaml.Node, sc *scope, bad *[]string) map[string]string {
@@ -97,7 +143,7 @@ func merge(a, b map[string]string) map[string]string {
 	return out
 }
 
-func planJob(repo, wf, id string, n *yaml.Node, base *scope, wfEnv map[string]string, wfShell, wfDir string, wfBad []string) ([]Check, []Skip) {
+func planJob(repo, wf, id string, n *yaml.Node, base *scope, wfEnv map[string]string, wfShell, wfDir string, wfBad []string, d deps) ([]Check, []Skip) {
 	_, j := mapPairs(n)
 
 	if u := scalar(j["uses"]); u != "" {
@@ -117,7 +163,7 @@ func planJob(repo, wf, id string, n *yaml.Node, base *scope, wfEnv map[string]st
 		return nil, []Skip{{Workflow: wf, Job: id, Reason: "strategy.matrix expands to no jobs"}}
 	}
 	for _, cb := range combos {
-		sc := &scope{event: base.event, sha: base.sha, matrix: cb.vals, typed: cb.typed, env: wfEnv}
+		sc := &scope{event: base.event, sha: base.sha, matrix: cb.vals, typed: cb.typed, env: wfEnv, needs: d.results}
 		bad := append([]string{}, wfBad...)
 		if mxBad != "" {
 			bad = append(bad, mxBad)
@@ -137,8 +183,17 @@ func planJob(repo, wf, id string, n *yaml.Node, base *scope, wfEnv map[string]st
 			name += cb.suffix()
 		}
 
-		if cond := scalar(j["if"]); cond != "" {
-			run, _, err := sc.condition(cond)
+		// Without a status function GitHub adds success() to a job's if:,
+		// which is false once a job it needs is skipped.
+		cond := scalar(j["if"])
+		if len(d.skipped) > 0 && !usesStatus(cond) {
+			skips = append(skips, Skip{Workflow: wf, Job: name, Reason: "needs " + d.skipped[0] + ", which is skipped"})
+			continue
+		}
+		if cond != "" {
+			jsc := *sc
+			jsc.needSkipped = len(d.skipped) > 0
+			run, _, err := jsc.condition(cond)
 			if err != nil {
 				bad = append(bad, "if: "+err.Error())
 			} else if !run {

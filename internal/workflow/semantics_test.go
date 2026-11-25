@@ -114,3 +114,59 @@ func TestChangedFilesCountsRenamedAwayFiles(t *testing.T) {
 		t.Errorf("both sides of a rename must be listed, got %v", files)
 	}
 }
+
+// A job whose needs were skipped is skipped too, unless its if: calls a
+// status function; needs.<job>.result says what happened to a need.
+func TestSkippedNeedsSkipTheirDependents(t *testing.T) {
+	wf := `on: pull_request
+jobs:
+  publish:
+    needs: release
+    runs-on: x
+    steps: [{run: echo publish}]
+  release:
+    if: github.event_name == 'push'
+    runs-on: x
+    steps: [{run: echo release}]
+  announce:
+    needs: [build, publish]
+    runs-on: x
+    steps: [{run: echo announce}]
+  build:
+    runs-on: x
+    steps: [{run: echo build}]
+  on-success:
+    needs: release
+    if: success()
+    runs-on: x
+    steps: [{run: echo on-success}]
+  report:
+    needs: release
+    if: always()
+    runs-on: x
+    steps: [{run: echo report}]
+  gate:
+    needs: [build, release]
+    if: ${{ !cancelled() && needs.release.result == 'skipped' && needs.build.result == 'success' }}
+    runs-on: x
+    steps: [{run: echo gate}]
+`
+	res := PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: "acme/app", Branch: "main"},
+		map[string][]byte{".github/workflows/ci.yml": []byte(wf)})
+	var ran []string
+	for _, c := range res.Checks {
+		ran = append(ran, c.Job)
+	}
+	if got := strings.Join(ran, ","); got != "build,report,gate" {
+		t.Errorf("planned %s, want build,report,gate (in file order)", got)
+	}
+	reasons := map[string]string{}
+	for _, s := range res.Skipped {
+		reasons[s.Job] = s.Reason
+	}
+	for job, want := range map[string]string{"publish": "needs release", "announce": "needs publish", "on-success": "is false"} {
+		if !strings.Contains(reasons[job], want) {
+			t.Errorf("%s skipped with %q, want a reason with %q", job, reasons[job], want)
+		}
+	}
+}

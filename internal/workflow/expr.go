@@ -19,6 +19,11 @@ type scope struct {
 	env   map[string]string
 	event Event
 	sha   string
+	// needs is needs.<id>.result of the jobs the job needs. needSkipped is
+	// set for a job's if: when one of them is skipped: success() is then
+	// false.
+	needs       map[string]string
+	needSkipped bool
 }
 
 type valKind uint8
@@ -228,14 +233,30 @@ func (sc *scope) subst(s string) (string, []string) {
 	return out, bad
 }
 
-// condition evaluates an if: expression. always reports whether the
-// expression names always() and holds, i.e. the step runs after a failure.
-func (sc *scope) condition(expr string) (run, always bool, err error) {
+// trimExpr removes the ${{ }} around a whole if: expression.
+func trimExpr(expr string) string {
 	e := strings.TrimSpace(expr)
 	if strings.HasPrefix(e, "${{") && strings.HasSuffix(e, "}}") && strings.Count(e, "${{") == 1 {
 		e = strings.TrimSpace(e[3 : len(e)-2])
 	}
-	v, sawAlways, err := sc.evaluate(e, true)
+	return e
+}
+
+// usesStatus reports whether an if: calls success(), failure(), cancelled()
+// or always(), wherever in the expression.
+func usesStatus(expr string) bool {
+	if expr == "" {
+		return false
+	}
+	p := &parser{src: trimExpr(expr), sc: &scope{}, status: true}
+	p.parseOr()
+	return p.sawStatus
+}
+
+// condition evaluates an if: expression. always reports whether the
+// expression names always() and holds, i.e. the step runs after a failure.
+func (sc *scope) condition(expr string) (run, always bool, err error) {
+	v, sawAlways, err := sc.evaluate(trimExpr(expr), true)
 	if err != nil {
 		return true, false, err
 	}
@@ -270,6 +291,7 @@ type parser struct {
 	sc        *scope
 	status    bool
 	sawAlways bool
+	sawStatus bool
 }
 
 func (p *parser) skipSpace() {
@@ -472,6 +494,7 @@ func (p *parser) call(name string) (val, error) {
 		if len(args) > 0 {
 			return val{}, unsupported("%s() takes no arguments", name)
 		}
+		p.sawStatus = true
 		if !p.status {
 			return unknownVal("function " + name + "() outside if:"), nil
 		}
@@ -480,7 +503,7 @@ func (p *parser) call(name string) (val, error) {
 			p.sawAlways = true
 			return boolVal(true), nil
 		case "success":
-			return boolVal(true), nil
+			return boolVal(!p.sc.needSkipped), nil
 		}
 		return boolVal(false), nil
 	case "startsWith", "endsWith", "contains":
@@ -587,6 +610,12 @@ func (p *parser) ident(word string) val {
 			return strVal(v)
 		}
 		return unknownVal("env." + k + " is not set in the workflow or job")
+	}
+	if rest, ok := strings.CutPrefix(word, "needs."); ok {
+		if id, field, _ := strings.Cut(rest, "."); field == "result" && p.sc.needs[id] != "" {
+			return strVal(p.sc.needs[id])
+		}
+		return unknownVal(word)
 	}
 	if f, err := strconv.ParseFloat(word, 64); err == nil {
 		return numVal(f, word)
