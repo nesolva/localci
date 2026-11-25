@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/nesolva/localci/internal/store"
 	_ "modernc.org/sqlite"
@@ -312,6 +313,41 @@ func TestNewerRequestForTheSamePRSupersedes(t *testing.T) {
 	if oldRun.State != store.StateCancelled || oldRun.Reason != "superseded" {
 		t.Errorf("old run = %s (%s), want cancelled (superseded)", oldRun.State, oldRun.Reason)
 	}
+}
+
+// A run still queued behind another pull request's run ends as superseded when a newer request for its pull
+// request arrives: whoever waits on it gets its end, and the newer run still runs.
+func TestNewerRequestSupersedesAQueuedRun(t *testing.T) {
+	g := newRig(t, fakeSuite(""), []string{"hang1", "pass1"}, 4)
+	git(t, g.src, "update-ref", "refs/pull/5/head", "HEAD")
+	git(t, g.src, "update-ref", "refs/pull/7/head", "HEAD")
+
+	busy, err := g.r.Submit(Request{Suite: "e2e", Heads: prHead(7)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the other pull request's run to hang", func() bool { return len(pidsIn(filepath.Join(g.shared, "pids"))) > 0 })
+	only := Filter{IDs: []string{"pass1"}}
+	queued, err := g.r.Submit(Request{Suite: "e2e", Heads: prHead(5), Tests: only})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer, err := g.r.Submit(Request{Suite: "e2e", Heads: prHead(5), Tests: only})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	run, err := g.r.Wait(ctx, queued)
+	if err != nil {
+		t.Fatalf("waiting on the superseded queued run: %v", err)
+	}
+	if run.State != store.StateCancelled || run.Reason != "superseded" {
+		t.Fatalf("queued run = %s (%s), want cancelled (superseded)", run.State, run.Reason)
+	}
+	g.r.Cancel(busy)
+	g.mustPass(g.wait(newer))
 }
 
 func TestTimeoutFailsTheRunAndStopsEverything(t *testing.T) {
