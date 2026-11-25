@@ -19,6 +19,22 @@ func TestASuiteCannotBeNamedChecks(t *testing.T) {
 	}
 }
 
+// A port belongs to a shard and the database template is built outside any: a port in the seed or in the
+// database URL is refused when the configuration is read, naming the key.
+func TestDatabaseTemplatesRefuseAShardPort(t *testing.T) {
+	for key, yaml := range map[string]string{
+		"database.template.seed": strings.Replace(fakeSuite(""), `seed: "echo seeded > {{db.url}}"`,
+			`seed: 'echo {{port "db"}} > {{db.url}}'`, 1),
+		"database.url": strings.Replace(fakeSuite(""), "driver: command\n",
+			"driver: command\n      url: '/data/{{port \"db\"}}/{{db.name}}'\n", 1),
+	} {
+		_, err := ParseYAML([]byte(yaml))
+		if err == nil || !strings.Contains(err.Error(), key) || !strings.Contains(err.Error(), "port") {
+			t.Errorf("%s with {{port}}: err = %v, want it refused naming the key", key, err)
+		}
+	}
+}
+
 func TestDefaultListNeverFetchesFromTheRegistry(t *testing.T) {
 	// An unscoped name on the registry is not ours: npx must only use the installed package.
 	if !strings.Contains(DefaultList, "--no-install") && !strings.Contains(DefaultList, "@nesolva/") {

@@ -226,6 +226,23 @@ func TestFailedCloneDropsNothing(t *testing.T) {
 	}
 }
 
+// The template seed may read the run's checkouts: {{dir "repo"}} is where the repository is checked out.
+func TestTemplateSeedReadsTheCheckout(t *testing.T) {
+	yaml := strings.Replace(fakeSuite(""), `seed: "echo seeded > {{db.url}}"`,
+		`seed: 'cp {{dir "acme/web"}}/seed.sql {{db.url}}'`, 1)
+	g := newRig(t, yaml, []string{"pass1"}, 4)
+	g.commit(map[string]string{"seed.sql": "insert into acme\n"})
+	g.mustPass(g.run(Request{Suite: "e2e", Heads: mainHead()}))
+
+	tpl, _ := filepath.Glob(filepath.Join(g.data, "state", "e2e", "db", "localci_tpl_*"))
+	if len(tpl) != 1 {
+		t.Fatalf("templates = %v, want one", tpl)
+	}
+	if b, _ := os.ReadFile(tpl[0]); string(b) != "insert into acme\n" {
+		t.Fatalf("template holds %q, want the checkout's seed.sql", b)
+	}
+}
+
 func TestPrepareRunsOnlyWhenItsKeyChanges(t *testing.T) {
 	prep := `    prepare:
       - repo: acme/web
