@@ -50,6 +50,11 @@ The dashboard uses 7357 and the worker listener 7358. Change `server.port` or `s
 `localci plan` (from a checkout) lists the checks a pull request would run and why the others are skipped. Also check
 `watch.max_age` (older heads only run by hand), `watch.drafts`, and `watch.forks` for a pull request from a fork.
 
+## Which status to require in branch protection
+
+Require `localci/checks`: it is green only when every check of the pull request's head has passed, or none applies. If it
+stays pending after a server restart, push again, or retry the checks that show an error: a restart does not repost it.
+
 ## Where the files are
 
 `localci config` prints the effective settings and where each came from. State, logs and artifacts are under the data
