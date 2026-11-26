@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/nesolva/localci/internal/checks"
+	"github.com/nesolva/localci/internal/config"
 	"github.com/nesolva/localci/internal/forge"
 	"github.com/nesolva/localci/internal/store"
 	"github.com/nesolva/localci/internal/suite"
@@ -91,7 +93,7 @@ func (s *Server) submitSuite(ctx context.Context, req SubmitRequest) (SubmitResu
 		}
 	}
 	if req.Dir != "" {
-		heads, err := suiteHeads(ctx, sd, req.Dir)
+		heads, err := suiteHeads(ctx, sd, req.Dir, s.configuredRepos())
 		if err != nil {
 			return SubmitResult{}, bad("%v", err)
 		}
@@ -111,8 +113,8 @@ func (s *Server) submitSuite(ctx context.Context, req SubmitRequest) (SubmitResu
 // suiteHeads is the working tree of dir as the head of its repository in the suite. A directory that is not one of
 // the suite's repositories is an error: running the default branch instead would test something else than what the
 // caller has in front of them, without saying so.
-func suiteHeads(ctx context.Context, sd *suite.Suite, dir string) ([]suite.Head, error) {
-	co, err := checkoutOf(ctx, dir)
+func suiteHeads(ctx context.Context, sd *suite.Suite, dir string, repos []config.Repo) ([]suite.Head, error) {
+	co, err := checkoutOf(ctx, dir, repos)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +134,7 @@ func (s *Server) submitChecks(ctx context.Context, req SubmitRequest) (SubmitRes
 	if req.Dir == "" {
 		return SubmitResult{}, bad("--checks needs the checkout to test: run it inside the repository")
 	}
-	co, err := checkoutOf(ctx, req.Dir)
+	co, err := checkoutOf(ctx, req.Dir, s.configuredRepos())
 	if err != nil {
 		return SubmitResult{}, bad("%v", err)
 	}
@@ -275,7 +277,22 @@ type checkout struct {
 // git@github-work:acme/web.git has none that says "github".
 var remoteRepo = regexp.MustCompile(`[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$`)
 
-func checkoutOf(ctx context.Context, dir string) (checkout, error) {
+// configuredRepos is the repositories of the current configuration (those that map a name to a local checkout
+// matter here); none when there is no configuration.
+func (s *Server) configuredRepos() []config.Repo {
+	if s.d.Config == nil {
+		return nil
+	}
+	eff, err := s.d.Config()
+	if err != nil || eff == nil {
+		return nil
+	}
+	return eff.Repos
+}
+
+// checkoutOf names the repository a directory belongs to: the configured repository whose `path` is the
+// directory's top level, else the one `origin` names.
+func checkoutOf(ctx context.Context, dir string, repos []config.Repo) (checkout, error) {
 	git := func(args ...string) (string, error) {
 		out, err := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...).Output()
 		return strings.TrimSpace(string(out)), err
@@ -286,18 +303,35 @@ func checkoutOf(ctx context.Context, dir string) (checkout, error) {
 		return c, fmt.Errorf("%s is not inside a git repository", dir)
 	}
 	// config, not `remote get-url`: the latter applies url.<base>.insteadOf, which can hide the repository's name.
-	url, err := git("config", "--get", "remote.origin.url")
-	if err != nil || url == "" {
-		return c, fmt.Errorf("%s has no `origin` remote, so its GitHub repository is unknown", c.top)
+	if c.repo = mappedRepo(c.top, repos); c.repo == "" {
+		url, err := git("config", "--get", "remote.origin.url")
+		if err != nil || url == "" {
+			return c, fmt.Errorf("%s has no `origin` remote, so its GitHub repository is unknown "+
+				"(map it with `path` on its entry under `repos:` in the config file)", c.top)
+		}
+		m := remoteRepo.FindStringSubmatch(url)
+		if m == nil {
+			return c, fmt.Errorf("`origin` of %s (%s) is not an owner/name repository address", c.top, url)
+		}
+		c.repo = m[1]
 	}
-	m := remoteRepo.FindStringSubmatch(url)
-	if m == nil {
-		return c, fmt.Errorf("`origin` of %s (%s) is not an owner/name repository address", c.top, url)
-	}
-	c.repo = m[1]
 	c.sha, _ = git("rev-parse", "HEAD")
 	c.branch, _ = git("rev-parse", "--abbrev-ref", "HEAD")
 	st, _ := git("status", "--porcelain", "--untracked-files=no")
 	c.dirty = st != ""
 	return c, nil
+}
+
+// mappedRepo is the configured repository whose `path` is top, or "". Both sides are symlink-resolved: git prints
+// the real path, the config holds the resolved one.
+func mappedRepo(top string, repos []config.Repo) string {
+	if real, err := filepath.EvalSymlinks(top); err == nil {
+		top = real
+	}
+	for _, r := range repos {
+		if r.Path != "" && r.Path == top {
+			return r.Name
+		}
+	}
+	return ""
 }

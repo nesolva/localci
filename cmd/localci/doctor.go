@@ -24,11 +24,17 @@ func cmdDoctor(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "capacity  %d check slots, %d job slots (%d CPUs, %s memory, Docker %s)\n\n",
 		c.CheckSlots, c.JobSlots, c.CPUs, config.FormatSize(c.Memory), dockerLabel(c.DockerMemory))
 
-	results := doctor.Run(context.Background(), doctor.Input{
+	in := doctor.Input{
 		Port:    eff.Server.Port,
 		DataDir: config.DataDir(),
 		Repos:   len(eff.Repos),
-	}, doctor.SystemDeps())
+	}
+	for _, r := range eff.Repos {
+		if r.Path != "" {
+			in.Paths = append(in.Paths, doctor.RepoPath{Name: r.Name, Path: r.Path})
+		}
+	}
+	results := doctor.Run(context.Background(), in, doctor.SystemDeps())
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 	for _, r := range results {
 		fmt.Fprintf(tw, "%s\t%s\t%s\n", strings.ToUpper(string(r.Status)), r.Name, r.Detail)

@@ -13,6 +13,10 @@ it running at login (`localci service status` checks it). The exit code is 3.
 `localci run` finds the repository by the checkout's `origin` remote and matches it with the suite's `repos`. Check
 `git remote get-url origin`, and that `owner/name` is in the suite's `repos`.
 
+A checkout with no `origin`, or one whose `origin` does not name the repository, is mapped by hand: give its entry under
+`repos:` a `path` (`path: ~/code/shop`, with `checks: false` when it has no pull requests on GitHub). See the
+[suites page](suites.md).
+
 ## A run ends `infrastructure: …`
 
 The run broke before its tests could say anything: a stack process exited, a service never became ready, the tenant

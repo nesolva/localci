@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -426,5 +427,18 @@ func TestWatchPlainForbiddenIsNotAPause(t *testing.T) {
 	g := &GitHub{clock: &fakeClock{now: t0}}
 	if rl := g.rateLimit(&response{status: 403, header: map[string][]string{}}); rl != nil {
 		t.Fatalf("a 403 without rate-limit headers is a permission error, got pause until %v", rl.Reset)
+	}
+}
+
+// A repository that lives only on this machine (a local checkout, no checks) has nothing on GitHub to poll.
+func TestLocalOnlyRepositoriesAreNotPolled(t *testing.T) {
+	o := OptionsFromConfig(&config.Config{Repos: []config.Repo{
+		{Name: "acme/api", Checks: true},
+		{Name: "acme/suites-only", Checks: false},
+		{Name: "acme/local", Checks: false, Path: "/code/local"},
+		{Name: "acme/mapped-with-checks", Checks: true, Path: "/code/mapped"},
+	}}, "tok")
+	if got := strings.Join(o.Repos, ","); got != "acme/api,acme/suites-only,acme/mapped-with-checks" {
+		t.Fatalf("polled repos = %s", got)
 	}
 }

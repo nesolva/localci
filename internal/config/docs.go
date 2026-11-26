@@ -47,6 +47,9 @@ repos:
       skip: [release.yml]
   - name: acme/web
     checks: true      # false: suites only, no workflow checks
+  - name: acme/local  # lives only on this machine, no origin needed
+    path: ~/code/local
+    checks: false     # nothing to poll on GitHub
 watch:
   poll: 60s
   max_age: 24h

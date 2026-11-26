@@ -68,14 +68,19 @@ type Input struct {
 	Port    int
 	DataDir string
 	Repos   int
+	// Paths are the repositories mapped to a local checkout (`repos[].path`), name to directory.
+	Paths []RepoPath
 }
+
+// RepoPath is one repository mapped to a local checkout.
+type RepoPath struct{ Name, Path string }
 
 const gib = uint64(1) << 30
 
 // Run performs every check, in a fixed order.
 func Run(ctx context.Context, in Input, d Deps) []Result {
 	docker := checkDocker(ctx, d)
-	return []Result{
+	rs := []Result{
 		checkRepos(in),
 		checkGit(ctx, d),
 		checkGH(ctx, d),
@@ -86,6 +91,7 @@ func Run(ctx context.Context, in Input, d Deps) []Result {
 		checkPrivate(in.DataDir),
 		checkPort(in.Port, d),
 	}
+	return append(rs, checkPaths(ctx, in, d)...)
 }
 
 // Failed reports whether any check failed.
@@ -104,6 +110,32 @@ func checkRepos(in Input) Result {
 			"add a `repos:` list to your config file (see `localci config`)"}
 	}
 	return Result{"repos", OK, fmt.Sprintf("%d configured", in.Repos), ""}
+}
+
+// checkPaths reports each `repos[].path` and whether it is a git checkout (its top level, not a folder inside one).
+func checkPaths(ctx context.Context, in Input, d Deps) []Result {
+	var rs []Result
+	for _, p := range in.Paths {
+		name := "path " + p.Name
+		top, err := d.Run(ctx, "git", "-C", p.Path, "rev-parse", "--show-toplevel")
+		if err != nil || !samePath(top, p.Path) {
+			rs = append(rs, Result{name, Warn, p.Path + " is not a git checkout",
+				"point `path` of " + p.Name + " at the top of its checkout (where `.git` is)"})
+			continue
+		}
+		rs = append(rs, Result{name, OK, p.Path + " (git checkout)", ""})
+	}
+	return rs
+}
+
+func samePath(a, b string) bool {
+	if r, err := filepath.EvalSymlinks(a); err == nil {
+		a = r
+	}
+	if r, err := filepath.EvalSymlinks(b); err == nil {
+		b = r
+	}
+	return a == b
 }
 
 func firstLine(s string) string {

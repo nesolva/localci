@@ -19,6 +19,8 @@ type Repo struct {
 	SkipWorkflows []string `json:"skip_workflows,omitempty"`
 	// Checks runs the repository's pull request checks (`.github/workflows`); default true.
 	Checks bool `json:"checks"`
+	// Path is the local checkout that is this repository, whatever its `origin` says (resolved, absolute).
+	Path string `json:"path,omitempty"`
 }
 
 // Config is the effective configuration, schema v1.
@@ -98,7 +100,9 @@ var Fields = []Field{
 		ref: func(c *Config) any { return &c.Version }},
 	{Key: "repos", Kind: kRepos, Default: "(none)",
 		Doc: "Repositories to watch, as `owner/name` entries; each may set `workflows.skip` (workflow files to ignore) and `checks: false` (watch it for suites only, run none of its workflow checks). " +
-			"Required to run checks. Env and flag take a comma-separated list of names.",
+			"`path` maps a repository to its checkout on this machine (`~` allowed, must exist): `localci run` from that directory tests it as this repository whatever `origin` says, so a repository with no `origin` works (suites clone it from that directory, not from GitHub); " +
+			"a repository with `path` and `checks: false` is not polled for pull requests, so set both for one that lives only here. " +
+			"Required to run checks. Env and flag take a comma-separated list of names, which replaces the whole list (so `path` is set in the file only).",
 		ref: func(c *Config) any { return &c.Repos }},
 	{Key: "watch.poll", Kind: kDuration, Default: "60s", Min: 10,
 		Doc: "How often to look for new or updated pull requests (at least 10s).",
