@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/nesolva/localci/internal/flock"
@@ -33,14 +34,24 @@ var urlUserinfo = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.-]*://)[^/?#\s]*@`)
 // redactURLs replaces the user and password of every URL in s.
 func redactURLs(s string) string { return urlUserinfo.ReplaceAllString(s, "${1}***@") }
 
-// git runs git in dir (empty = current) and returns trimmed stdout.
+// gitStopDelay is how long a cancelled git has to stop before it is killed.
+const gitStopDelay = 10 * time.Second
+
+// git runs git in dir (empty = current) and returns trimmed stdout. A cancelled
+// git is asked to stop, not killed: on SIGTERM it removes its lock files, which
+// a kill leaves behind to fail the next git in that repository.
 func git(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := osexec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
-	if err := cmd.Run(); err != nil {
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = gitStopDelay
+	err := cmd.Run()
+	// ErrWaitDelay: git succeeded, but something it left running (an ssh
+	// connection kept open for reuse) still holds its output.
+	if err != nil && !(errors.Is(err, osexec.ErrWaitDelay) && ctx.Err() == nil) {
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}

@@ -262,3 +262,88 @@ func TestCheckoutClearsLockFilesALeftByAKilledGit(t *testing.T) {
 		t.Fatalf("a tracked *.lock file of the project must survive: %v", err)
 	}
 }
+
+// A cancelled run's git must take its lock files with it. A host without lsof keeps a young lock for minutes, so one
+// left behind fails the run that superseded this one.
+func TestCancelledCheckoutLeavesNoLockFile(t *testing.T) {
+	origin := newOrigin(t)
+	write(t, filepath.Join(origin, ".gitattributes"), "app.txt filter=hold\n")
+	write(t, filepath.Join(origin, "app.txt"), "v1\n")
+	run(t, origin, "add", ".")
+	run(t, origin, "commit", "-q", "-m", "one")
+	first := run(t, origin, "rev-parse", "HEAD")
+	write(t, filepath.Join(origin, "app.txt"), "v2\n")
+	run(t, origin, "commit", "-q", "-am", "two")
+	second := run(t, origin, "rev-parse", "HEAD")
+	m := newMirror(t, origin)
+	if err := m.Fetch(bg, "+refs/heads/*:refs/heads/*"); err != nil {
+		t.Fatal(err)
+	}
+	ws := OpenWorkspace(t.TempDir(), "check", "acme/web")
+	if err := ws.Checkout(bg, m, first, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// The filter holds the next checkout while git has the index locked. It
+	// lasts while its marker does, so removing the temp dir ends it.
+	held := filepath.Join(t.TempDir(), "held")
+	run(t, ws.Dir, "config", "filter.hold.smudge",
+		"exec 2>/dev/null; touch '"+held+"'; while [ -e '"+held+"' ]; do sleep 0.05; done; cat")
+	ctx, cancel := context.WithCancel(bg)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- ws.Checkout(ctx, m, second, nil) }()
+	for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if _, err := os.Stat(held); err == nil {
+			break
+		} else if time.Now().After(deadline) {
+			t.Fatal("the checkout never reached the filter")
+		}
+	}
+	lock := filepath.Join(ws.Dir, ".git", "index.lock")
+	if _, err := os.Stat(lock); err != nil {
+		t.Fatalf("the held checkout has no index lock: %v", err)
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled checkout = %v, want %v", err, context.Canceled)
+	}
+	if _, err := os.Stat(lock); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the cancelled checkout left %s (stat: %v)", filepath.Base(lock), err)
+	}
+}
+
+// A git killed during the workspace's first `git init` (a run superseded right after it started) leaves a .git that
+// is not a repository yet. The next run must complete it, or every later checkout of that workspace fails.
+func TestCheckoutCompletesAHalfMadeRepository(t *testing.T) {
+	origin := newOrigin(t)
+	write(t, filepath.Join(origin, "app.txt"), "v1\n")
+	run(t, origin, "add", ".")
+	run(t, origin, "commit", "-q", "-m", "one")
+	head := run(t, origin, "rev-parse", "HEAD")
+	m := newMirror(t, origin)
+	if err := m.Fetch(bg, "+refs/heads/*:refs/heads/*"); err != nil {
+		t.Fatal(err)
+	}
+	// What a killed `git init` has been seen to leave: some directories, no HEAD.
+	for name, left := range map[string][]string{
+		"only objects":         {"objects"},
+		"templates, no HEAD":   {"hooks", "info", "objects"},
+		"an empty .git folder": {""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ws := OpenWorkspace(t.TempDir(), "check", "acme/web")
+			for _, d := range left {
+				if err := os.MkdirAll(filepath.Join(ws.Dir, ".git", d), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := ws.Checkout(bg, m, head, nil); err != nil {
+				t.Fatalf("checkout after a killed git init: %v", err)
+			}
+			if b, _ := os.ReadFile(filepath.Join(ws.Dir, "app.txt")); string(b) != "v1\n" {
+				t.Fatalf("app.txt = %q, want the commit's", b)
+			}
+		})
+	}
+}
