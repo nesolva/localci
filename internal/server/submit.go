@@ -86,8 +86,8 @@ func (s *Server) submitSuite(ctx context.Context, req SubmitRequest) (SubmitResu
 		sr.Affected = &suite.AffectedRequest{Base: req.Base, Explain: req.Explain}
 	}
 	if req.Failed != "" {
-		if _, err := s.d.Store.Run(ctx, req.Failed); err != nil {
-			return SubmitResult{}, bad("no run %s to take failed tests from", req.Failed)
+		if err := s.checkFailedOf(ctx, req.Failed, name); err != nil {
+			return SubmitResult{}, err
 		}
 	}
 	if req.Dir != "" {
@@ -106,6 +106,29 @@ func (s *Server) submitSuite(ctx context.Context, req SubmitRequest) (SubmitResu
 		return SubmitResult{}, err
 	}
 	return SubmitResult{Runs: []Run{s.summarize(ctx, run)}}, nil
+}
+
+// checkFailedOf refuses `failed` unless run id has failed tests of this suite. Anything else would select no test, or
+// the tests of another suite.
+func (s *Server) checkFailedOf(ctx context.Context, id, name string) error {
+	of, err := s.d.Store.Run(ctx, id)
+	if err != nil {
+		return bad("no run %s to take failed tests from", id)
+	}
+	switch {
+	case of.Kind != store.KindSuite:
+		return bad("run %s is a check, not a run of suite %s", id, name)
+	case of.Suite != name:
+		return bad("run %s is of suite %s, not %s", id, of.Suite, name)
+	}
+	failed, err := s.d.Store.Failures(ctx, id)
+	if err != nil {
+		return err
+	}
+	if len(failed) == 0 {
+		return bad("run %s has no failed tests", id)
+	}
+	return nil
 }
 
 // suiteHeads is the working tree of dir as the head of its repository in the suite. A directory that is not one of

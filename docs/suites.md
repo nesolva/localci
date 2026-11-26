@@ -32,7 +32,7 @@ suites:
 | `test` | `repo`, `run` (the command for one shard), `env`, and `list` (how to list tests: NDJSON `{test,file,title,line}`; default `npx --no-install --offline localci-playwright list`, for pytest `python -m localci_pytest list`). |
 | `shards` | A number, or `auto` (from the machine's capacity). Tests are split by measured duration; a suite with fewer tests than shards leaves some shards empty. |
 | `isolation` | `isolated` (default), `shared-db`, `tenant` or `auto`; see [isolation levels](isolation.md). |
-| `timeout` | Longest a run may take, such as `10m`. |
+| `timeout` | Longest a run may take, such as `10m`; 60 minutes when not set, `0` turns it off. Time spent queued behind other runs does not count. A run it stops ends failed with `timed out after <d>`, and `wait` exits 4. |
 | `exclusive` | `true` stops other work while the suite runs. |
 
 ## The environment of a run
