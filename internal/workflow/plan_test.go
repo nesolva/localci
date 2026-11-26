@@ -68,8 +68,26 @@ func TestConditions(t *testing.T) {
 		{expr: "!(github.event_name == 'push') && matrix.os == 'linux'", run: true},
 		{expr: "github.event_name == 'push' || github.event_name == 'pull_request'", run: true},
 		{expr: "${{ always() }}", run: true, always: true},
-		{expr: "github.ref == 'refs/heads/main'", wantErrSubstr: "github.ref"},
-		{expr: "contains(github.event_name, 'pull')", wantErrSubstr: "contains"},
+		// A side known at plan time decides && and || even when the other one is not.
+		{expr: "github.event_name == 'push' && secrets.DEPLOY_KEY != ''", run: false},
+		{expr: "secrets.DEPLOY_KEY != '' && github.event_name == 'push'", run: false},
+		{expr: "github.event_name == 'pull_request' || steps.probe.outputs.hit", run: true},
+		{expr: "failure() && steps.probe.outputs.hit == 'true'", run: false},
+		{expr: "github.event_name == 'push' && contains(github.event.head_commit.message, '[release]')", run: false},
+		{expr: "contains(github.event.pull_request.labels.*.name, 'deploy') && github.event_name == 'push'", run: false},
+		{expr: "github.event_name == 'push' && fromJSON(vars.TARGETS)[0] == 'prod'", run: false},
+		{expr: "!(github.event_name == 'push' && secrets.DEPLOY_KEY)", run: true},
+		// String functions on known values; GitHub compares case-insensitively.
+		{expr: "startsWith(github.event_name, 'PULL_')", run: true},
+		{expr: "endsWith(matrix.os, 'UX')", run: true},
+		{expr: "contains(github.event_name, 'push')", run: false},
+		// Still unknown: nothing known decides it.
+		{expr: "github.event_name == 'pull_request' && secrets.DEPLOY_KEY != ''", wantErrSubstr: "secrets.DEPLOY_KEY"},
+		{expr: "secrets.DEPLOY_KEY || github.event_name == 'push'", wantErrSubstr: "secrets.DEPLOY_KEY"},
+		{expr: "!steps.probe.outputs.hit", wantErrSubstr: "steps.probe.outputs.hit"},
+		{expr: "contains(vars.TARGETS, 'prod')", wantErrSubstr: "vars.TARGETS"},
+		{expr: "github.event_name == 'pull_request' && hashFiles('**/go.sum') != ''", wantErrSubstr: "hashFiles"},
+		{expr: "github.event_name == 'push' && (", wantErrSubstr: "empty expression"},
 	} {
 		run, always, err := sc.condition(tc.expr)
 		if tc.wantErrSubstr != "" {
@@ -81,6 +99,53 @@ func TestConditions(t *testing.T) {
 		if err != nil || run != tc.run || always != tc.always {
 			t.Errorf("%q: got run=%v always=%v err=%v, want run=%v always=%v", tc.expr, run, always, err, tc.run, tc.always)
 		}
+	}
+}
+
+// The github context of the event is known at plan time.
+func TestGithubContextConditions(t *testing.T) {
+	pr := Event{Name: "pull_request", Repo: "acme/app", Branch: "main", PR: 7, HeadBranch: "feature/x"}
+	noNumber := Event{Name: "pull_request", Repo: "acme/app", Branch: "main"} // localci plan, a working tree
+	push := Event{Name: "push", Repo: "acme/app", Branch: "main"}
+	for _, tc := range []struct {
+		ev            Event
+		expr          string
+		run           bool
+		wantErrSubstr string
+	}{
+		{ev: pr, expr: "github.ref == 'refs/pull/7/merge'", run: true},
+		{ev: pr, expr: "github.ref == 'refs/heads/main'", run: false},
+		{ev: pr, expr: "github.event_name == 'push' || github.ref == 'refs/heads/main'", run: false},
+		{ev: pr, expr: "startsWith(github.ref, 'refs/tags/')", run: false},
+		{ev: pr, expr: "github.ref_type == 'tag'", run: false},
+		{ev: pr, expr: "github.ref_name == '7/merge'", run: true},
+		{ev: pr, expr: "startsWith(github.head_ref, 'feature/')", run: true},
+		{ev: pr, expr: "github.repository == 'acme/app' && github.repository_owner == 'acme'", run: true},
+		{ev: noNumber, expr: "github.ref == 'refs/heads/main'", run: false},
+		{ev: noNumber, expr: "github.ref != 'refs/heads/main'", run: true},
+		{ev: noNumber, expr: "github.head_ref == 'feature/x'", wantErrSubstr: "github.head_ref"},
+		{ev: push, expr: "github.ref == 'refs/heads/main' && github.ref_name == 'main'", run: true},
+		{ev: push, expr: "github.head_ref == ''", run: true},
+	} {
+		sc := &scope{event: tc.ev}
+		run, _, err := sc.condition(tc.expr)
+		if tc.wantErrSubstr != "" {
+			if err == nil || !strings.Contains(err.Error(), tc.wantErrSubstr) {
+				t.Errorf("%s %q: want an unsupported error mentioning %q, got run=%v err=%v", tc.ev.Name, tc.expr, tc.wantErrSubstr, run, err)
+			}
+			continue
+		}
+		if err != nil || run != tc.run {
+			t.Errorf("%s #%d %q: got run=%v err=%v, want run=%v", tc.ev.Name, tc.ev.PR, tc.expr, run, err, tc.run)
+		}
+	}
+
+	// In text, a ref without its pull request number is not guessed.
+	if out, bad := (&scope{event: pr}).subst("${{ github.ref }}"); out != "refs/pull/7/merge" || bad != nil {
+		t.Errorf("github.ref with a number = %q %v", out, bad)
+	}
+	if out, bad := (&scope{event: noNumber}).subst("${{ github.ref }}"); out != "${{ github.ref }}" || len(bad) != 1 {
+		t.Errorf("github.ref without a number = %q %v, want it left unresolved", out, bad)
 	}
 }
 

@@ -400,3 +400,36 @@ func TestAStaleMergeRefIsNotTestedForTheNewHead(t *testing.T) {
 		t.Fatalf("statuses on localci/checks = %+v, want the last one a success on the head", ps)
 	}
 }
+
+// Jobs gated on the ref or the head branch are planned the way GitHub runs
+// them for this pull request.
+func TestJobConditionsSeeThePullRequest(t *testing.T) {
+	fx := newFixture(t, `name: CI
+on: [pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ran >> "$RUNLOG"
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deployed >> "$RUNLOG"
+  release-notes:
+    if: startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ran >> "$RUNLOG"
+`)
+	req := fx.request(1, fx.pull("1", map[string]string{"a": "1"}))
+	req.HeadBranch = "release/2.0"
+	sub := fx.submit(req)
+	var names []string
+	for _, r := range sub.Runs {
+		names = append(names, r.Name)
+	}
+	if got := strings.Join(names, ","); got != "build,release-notes" {
+		t.Fatalf("ran %s, want build,release-notes (skipped: %+v)", got, sub.Skipped)
+	}
+}

@@ -114,3 +114,117 @@ func TestChangedFilesCountsRenamedAwayFiles(t *testing.T) {
 		t.Errorf("both sides of a rename must be listed, got %v", files)
 	}
 }
+
+// A job whose needs were skipped is skipped too, unless its if: calls a
+// status function; needs.<job>.result says what happened to a need.
+func TestSkippedNeedsSkipTheirDependents(t *testing.T) {
+	wf := `on: pull_request
+jobs:
+  publish:
+    needs: release
+    runs-on: x
+    steps: [{run: echo publish}]
+  release:
+    if: github.event_name == 'push'
+    runs-on: x
+    steps: [{run: echo release}]
+  announce:
+    needs: [build, publish]
+    runs-on: x
+    steps: [{run: echo announce}]
+  build:
+    runs-on: x
+    steps: [{run: echo build}]
+  on-success:
+    needs: release
+    if: success()
+    runs-on: x
+    steps: [{run: echo on-success}]
+  report:
+    needs: release
+    if: always()
+    runs-on: x
+    steps: [{run: echo report}]
+  gate:
+    needs: [build, release]
+    if: ${{ !cancelled() && needs.release.result == 'skipped' && needs.build.result == 'success' }}
+    runs-on: x
+    steps: [{run: echo gate}]
+`
+	res := PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: "acme/app", Branch: "main"},
+		map[string][]byte{".github/workflows/ci.yml": []byte(wf)})
+	var ran []string
+	for _, c := range res.Checks {
+		ran = append(ran, c.Job)
+	}
+	if got := strings.Join(ran, ","); got != "build,report,gate" {
+		t.Errorf("planned %s, want build,report,gate (in file order)", got)
+	}
+	reasons := map[string]string{}
+	for _, s := range res.Skipped {
+		reasons[s.Job] = s.Reason
+	}
+	for job, want := range map[string]string{"publish": "needs release", "announce": "needs publish", "on-success": "is false"} {
+		if !strings.Contains(reasons[job], want) {
+			t.Errorf("%s skipped with %q, want a reason with %q", job, reasons[job], want)
+		}
+	}
+}
+
+// A job whose if: cannot be decided before it runs is skipped with the reason,
+// and so are the jobs that need it.
+func TestUndecidedJobConditionSkipsTheJob(t *testing.T) {
+	wf := `on: pull_request
+jobs:
+  deploy:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: x
+    steps: [{run: echo deploy}]
+  notify:
+    needs: deploy
+    runs-on: x
+    steps: [{run: echo notify}]
+  test:
+    runs-on: x
+    steps: [{run: echo test}]
+`
+	res := PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: "acme/app", Branch: "main"},
+		map[string][]byte{".github/workflows/ci.yml": []byte(wf)})
+	if len(res.Checks) != 1 || res.Checks[0].Job != "test" {
+		t.Fatalf("planned %+v, want only test", res.Checks)
+	}
+	reasons := map[string]string{}
+	for _, s := range res.Skipped {
+		reasons[s.Job] = s.Reason
+	}
+	if !strings.Contains(reasons["deploy"], "vars.DEPLOY_ENABLED") || !strings.Contains(reasons["notify"], "needs deploy") {
+		t.Errorf("skips = %+v, want deploy (naming vars.DEPLOY_ENABLED) and notify (needs deploy)", res.Skipped)
+	}
+}
+
+// A job that calls a reusable workflow is skipped like any other job when
+// GitHub would skip it; only a job that would run is reported unsupported.
+func TestReusableWorkflowJobFollowsItsConditions(t *testing.T) {
+	wf := `on: pull_request
+jobs:
+  release:
+    if: github.event_name == 'push'
+    uses: acme/shared/.github/workflows/release.yml@main
+  e2e:
+    if: contains(github.event.pull_request.labels.*.name, 'e2e')
+    uses: acme/shared/.github/workflows/e2e.yml@main
+  docs:
+    needs: release
+    uses: acme/shared/.github/workflows/docs.yml@main
+  lint:
+    uses: acme/shared/.github/workflows/lint.yml@main
+`
+	res := PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: "acme/app", Branch: "main"},
+		map[string][]byte{".github/workflows/ci.yml": []byte(wf)})
+	if len(res.Checks) != 1 || res.Checks[0].Job != "lint" || !strings.Contains(res.Checks[0].Unsupported, "reusable workflow") {
+		t.Errorf("planned %+v, want only lint, reported unsupported", res.Checks)
+	}
+	if len(res.Skipped) != 3 {
+		t.Errorf("skipped %+v, want release, e2e and docs", res.Skipped)
+	}
+}

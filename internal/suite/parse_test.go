@@ -41,3 +41,23 @@ func TestDefaultListNeverFetchesFromTheRegistry(t *testing.T) {
 		t.Fatalf("default list command %q may download an unscoped package", DefaultList)
 	}
 }
+
+// The stack and the seed reach a Postgres database through its URL; a
+// container only runs the tools. A postgres database without url is refused
+// when the configuration is read, naming the key.
+func TestPostgresDatabaseNeedsAURL(t *testing.T) {
+	suite := func(db string) string {
+		return "suites:\n  e2e:\n    repos: [acme/shop]\n" +
+			"    database: {driver: postgres, " + db + "template: {repo: acme/shop, seed: make seed}}\n" +
+			"    test: {repo: acme/shop, run: make e2e}\n"
+	}
+	for _, db := range []string{"container: acme-postgres, ", ""} {
+		_, err := ParseYAML([]byte(suite(db)))
+		if err == nil || !strings.Contains(err.Error(), "database.url") {
+			t.Errorf("postgres with %q: err = %v, want it refused naming database.url", db, err)
+		}
+	}
+	if _, err := ParseYAML([]byte(suite("url: 'postgres://postgres@127.0.0.1:5432/postgres', container: acme-postgres, "))); err != nil {
+		t.Errorf("postgres with url and container: %v", err)
+	}
+}

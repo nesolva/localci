@@ -25,6 +25,10 @@ type Event struct {
 	// Files are the changed paths. nil with no BaseRef means "unknown": path
 	// filters are then not applied and the check is planned.
 	Files []string
+	// PR is the pull request number and HeadBranch its head branch, for
+	// github.ref and github.head_ref. Zero and empty mean unknown.
+	PR         int
+	HeadBranch string
 }
 
 // Check is one job (one matrix cell) a workflow would run.

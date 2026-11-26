@@ -13,8 +13,12 @@ suites:
         cache_key: [package-lock.json]
         keep: [node_modules]
     database:
-      driver: postgres             # needs createdb and dropdb on the PATH
-      container: acme-postgres     # an already running container with the Postgres tools
+      driver: postgres
+      # What the seed and the stack connect to; each shard's database replaces the path.
+      url: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      # Optional: run createdb and dropdb inside this running container instead of from the PATH, for example
+      # docker run -d --name acme-postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
+      container: acme-postgres
       user: postgres
       template:
         seed: npm run db:migrate && npm run db:seed

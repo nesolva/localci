@@ -73,7 +73,7 @@ func TestPullRequestTypesSelectTheActivity(t *testing.T) {
 		{"pull_request:\n    branches: [main]", true},
 		{"pull_request:", true},
 	} {
-		yml := "name: publish\non:\n  " + tc.on + "\njobs:\n  b:\n    runs-on: x\n    if: github.event.pull_request.merged == true\n    steps:\n      - run: make publish\n"
+		yml := "name: publish\non:\n  " + tc.on + "\njobs:\n  b:\n    runs-on: x\n    steps:\n      - run: make publish\n"
 		res := PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: "acme/app", Branch: "main", Files: []string{"a.go"}},
 			map[string][]byte{".github/workflows/publish.yml": []byte(yml)})
 		if tc.plan {

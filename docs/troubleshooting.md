@@ -54,6 +54,13 @@ The dashboard uses 7357 and the worker listener 7358. Change `server.port` or `s
 `localci plan` (from a checkout) lists the checks a pull request would run and why the others are skipped. Also check
 `watch.max_age` (older heads only run by hand), `watch.drafts`, and `watch.forks` for a pull request from a fork.
 
+## A job does not run
+
+`localci plan` shows the reason. "cannot be decided before the job runs" means the job's `if:` depends on a secret, a
+variable or another job's outputs. localci does not have those when it plans, so it skips the job rather than guess.
+To run it locally, gate it on what is known when the pull request is planned: the event, the branch, the ref or the
+repository.
+
 ## Where the files are
 
 `localci config` prints the effective settings and where each came from. State, logs and artifacts are under the data

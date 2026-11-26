@@ -14,6 +14,7 @@ suites:
       - {repo: acme/api, run: npm ci, cache_key: [package-lock.json], keep: [node_modules]}
     database:
       driver: postgres
+      url: postgres://postgres:postgres@127.0.0.1:5432/postgres
       container: acme-postgres
       user: postgres
       template:
