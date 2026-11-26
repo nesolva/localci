@@ -140,12 +140,17 @@ func TestRetryCheckRerunsOnlyThatCheck(t *testing.T) {
 	if got := rg.checkRuns() - runsBefore; got != 1 {
 		t.Errorf("the retry started %d check runs, want 1", got)
 	}
+	reran := false
 	for _, p := range rg.fg.statuses()[postsBefore:] {
-		if p.st.Suite != "CI/unit" {
+		switch p.st.Suite {
+		case "CI/unit":
+			reran = true
+		case "checks": // the summary of the head, which every retry updates
+		default:
 			t.Errorf("the retry posted a status for %q", p.st.Suite)
 		}
 	}
-	if len(rg.fg.statuses()) == postsBefore {
+	if !reran {
 		t.Error("the retry posted nothing for the check it reran")
 	}
 }

@@ -396,6 +396,7 @@ func TestAStaleMergeRefIsNotTestedForTheNewHead(t *testing.T) {
 		t.Fatalf("tested %+v, want merge %s of head %s", hs, freshMerge, head)
 	}
 	// ... and the error it gave up with no longer leaves the head red.
+	fx.runner.Wait()
 	if ps := fx.forge.of("checks"); len(ps) == 0 || ps[len(ps)-1].SHA != head || ps[len(ps)-1].State != forge.StateSuccess {
 		t.Fatalf("statuses on localci/checks = %+v, want the last one a success on the head", ps)
 	}
