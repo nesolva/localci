@@ -262,3 +262,38 @@ func TestCheckoutClearsLockFilesALeftByAKilledGit(t *testing.T) {
 		t.Fatalf("a tracked *.lock file of the project must survive: %v", err)
 	}
 }
+
+// A git killed during the workspace's first `git init` (a run superseded right after it started) leaves a .git that
+// is not a repository yet. The next run must complete it, or every later checkout of that workspace fails.
+func TestCheckoutCompletesAHalfMadeRepository(t *testing.T) {
+	origin := newOrigin(t)
+	write(t, filepath.Join(origin, "app.txt"), "v1\n")
+	run(t, origin, "add", ".")
+	run(t, origin, "commit", "-q", "-m", "one")
+	head := run(t, origin, "rev-parse", "HEAD")
+	m := newMirror(t, origin)
+	if err := m.Fetch(bg, "+refs/heads/*:refs/heads/*"); err != nil {
+		t.Fatal(err)
+	}
+	// What a killed `git init` has been seen to leave: some directories, no HEAD.
+	for name, left := range map[string][]string{
+		"only objects":         {"objects"},
+		"templates, no HEAD":   {"hooks", "info", "objects"},
+		"an empty .git folder": {""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ws := OpenWorkspace(t.TempDir(), "check", "acme/web")
+			for _, d := range left {
+				if err := os.MkdirAll(filepath.Join(ws.Dir, ".git", d), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := ws.Checkout(bg, m, head, nil); err != nil {
+				t.Fatalf("checkout after a killed git init: %v", err)
+			}
+			if b, _ := os.ReadFile(filepath.Join(ws.Dir, "app.txt")); string(b) != "v1\n" {
+				t.Fatalf("app.txt = %q, want the commit's", b)
+			}
+		})
+	}
+}

@@ -127,9 +127,25 @@ func TestChecksSummaryWithoutMergeRef(t *testing.T) {
 	wantPendingThen(t, summaries(fx), "success: 1 passed")
 }
 
+// logRunsOnFailure shows how each run ended: a red summary only counts them,
+// and the reason tells a broken run from a wrong count.
+func logRunsOnFailure(t *testing.T, fx *fixture) {
+	if !t.Failed() {
+		return
+	}
+	runs, err := fx.runner.Store.Runs(context.Background(), 0)
+	if err != nil {
+		t.Log(err)
+	}
+	for _, r := range runs {
+		t.Logf("run %s: %s %q", r.ID, r.State, r.Reason)
+	}
+}
+
 func TestChecksSummarySuperseded(t *testing.T) {
 	t.Run("by a newer head", func(t *testing.T) {
 		fx := newFixture(t, jobs("slow", gatedRun))
+		defer logRunsOnFailure(t, fx)
 		open := newGate(t, fx)
 		old := fx.pull("1", map[string]string{"a": "1"})
 		first := fx.start(fx.request(1, old)).Runs[0]
@@ -152,6 +168,7 @@ func TestChecksSummarySuperseded(t *testing.T) {
 	})
 	t.Run("by a second submit of the same head", func(t *testing.T) {
 		fx := newFixture(t, jobs("slow", gatedRun))
+		defer logRunsOnFailure(t, fx)
 		open := newGate(t, fx)
 		head := fx.pull("1", map[string]string{"a": "1"})
 		first := fx.start(fx.request(1, head)).Runs[0]
