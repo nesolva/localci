@@ -20,6 +20,16 @@ an older version left open, and `localci doctor` fails with the fix when a mode 
 Test hooks (`POST /runs/<run>/hooks/<area>/<action>`) are made by the shards of a run on the TCP address. Each run has
 its own token in `$LOCALCI_HOOK_TOKEN`; see [the report protocol](protocol.md).
 
+## Runs
+
+| Call | Answer |
+|---|---|
+| `POST /api/runs` | `202 {runs, skipped, cursor}`. `400` when `failed` names a run that does not exist, is a check, belongs to another suite or has no failed tests; no run is created. |
+
+A run that failed carries `outcome` when its tests are not the whole story: `timeout` (the suite's `timeout` stopped it)
+or `no_tests_matched` (files, `grep` or `failed` selected no test). Branch on it, not on `reason`, which is text for
+people. When the run also carries `infra`, it is an infrastructure failure first.
+
 ## Workers
 
 | Call | Answer |

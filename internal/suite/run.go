@@ -28,6 +28,11 @@ var (
 	errInfra = errors.New("infrastructure failure")
 )
 
+// noMatchError ends a run whose explicit filter selected no test: with nothing run, "passed" would be a lie.
+type noMatchError struct{ filter string }
+
+func (e noMatchError) Error() string { return "no tests matched " + e.filter }
+
 // execution is one run in progress.
 type execution struct {
 	r      *Runner
@@ -150,32 +155,38 @@ func (r *Runner) execute(j *job) {
 		return
 	}
 	err := ex.run()
+	// Nothing after this runs under the suite's timeout: a timer that fired now would call a finished run timed out.
+	ex.stopTimeout()
 	ex.triage() // it classifies the interrupted tests as infrastructure, with the failure as evidence
-	state, reason := ex.outcome(err)
+	state, reason, code := ex.outcome(err)
 	if err == nil && ctx.Err() == nil && ex.selected != nil {
 		ex.affectedDone(ex.selected.all, ex.selected.ran)
 	}
-	r.finishRun(j.id, state, reason)
+	r.finishRun(j.id, state, reason, code)
 }
 
-// outcome turns how run ended into the run's final state.
-func (ex *execution) outcome(err error) (string, string) {
+// outcome turns how run ended into the run's final state, reason and outcome code.
+func (ex *execution) outcome(err error) (string, string, string) {
 	if c := context.Cause(ex.j.ctx); c != nil && ex.j.ctx.Err() != nil {
 		reason := "cancelled"
 		var sc stopCause
 		if errors.As(c, &sc) {
 			reason = string(sc)
 		}
-		return store.StateCancelled, reason
+		return store.StateCancelled, reason, ""
 	}
 	if ex.ctx.Err() != nil && errors.Is(context.Cause(ex.ctx), errTimeout) {
-		return store.StateFailed, fmt.Sprintf("timed out after %s", ex.suite.Timeout)
+		return store.StateFailed, fmt.Sprintf("timed out after %s", ex.suite.Timeout), store.OutcomeTimeout
 	}
 	if infra := ex.infraReason(); infra != "" {
-		return store.StateFailed, "infrastructure: " + infra
+		return store.StateFailed, "infrastructure: " + infra, ""
+	}
+	var none noMatchError
+	if errors.As(err, &none) {
+		return store.StateFailed, trim(none.Error(), 600), store.OutcomeNoTests
 	}
 	if err != nil {
-		return store.StateFailed, trim(err.Error(), 600)
+		return store.StateFailed, trim(err.Error(), 600), ""
 	}
 	failures, _ := ex.r.d.Store.Failures(ex.bg, ex.id)
 	moved := ex.movedCount()
@@ -204,15 +215,13 @@ func (ex *execution) outcome(err error) (string, string) {
 		if note != "" {
 			reason += "; " + note
 		}
-		return store.StateFailed, reason
+		return store.StateFailed, reason, ""
 	case ex.explainOnly:
-		return store.StatePassed, "explain only: no test ran"
+		return store.StatePassed, "explain only: no test ran", ""
 	case total == 0 && ex.j.req.Affected != nil:
-		return store.StatePassed, "no tests affected"
-	case total == 0:
-		return store.StatePassed, "no tests matched"
+		return store.StatePassed, "no tests affected", ""
 	}
-	return store.StatePassed, note
+	return store.StatePassed, note, ""
 }
 
 func trim(s string, n int) string {
@@ -281,6 +290,10 @@ func (ex *execution) run() error {
 	tests, err := ex.applyFilter(all)
 	if err != nil {
 		return err
+	}
+	// Decided before the affected choice: an affected run may rightly choose nothing, a filter the caller typed may not.
+	if f := ex.j.req.Tests; len(tests) == 0 && !f.empty() {
+		return noMatchError{f.String()}
 	}
 	if ex.j.req.Affected != nil {
 		if tests, err = ex.selectAffected(all, tests); err != nil {
@@ -499,41 +512,22 @@ func (ex *execution) applyFilter(all []listedTest) ([]listedTest, error) {
 			failed[t.ID] = true
 		}
 	}
+	var files fileFilter
+	if len(f.Files) > 0 {
+		files = ex.newFileFilter(f.Files, all)
+	}
 	var out []listedTest
 	for _, t := range all {
 		switch {
 		case len(f.IDs) > 0 && !slices.Contains(f.IDs, t.id):
 		case re != nil && !re.MatchString(t.file+" "+t.title):
-		case len(f.Files) > 0 && !matchesFile(f.Files, t.file):
+		case len(f.Files) > 0 && !files.matches(t.file):
 		case failed != nil && !failed[t.id]:
 		default:
 			out = append(out, t)
 		}
 	}
 	return out, nil
-}
-
-// matchesFile says whether a listed file is one of files or inside one of them. The runner lists files relative to
-// its own test directory (Playwright's testDir), while people type them from the repository root or as absolute
-// paths, so a filter also matches when one of its trailing path parts names the listed file or a directory above it.
-func matchesFile(files []string, file string) bool {
-	for _, f := range files {
-		f = strings.TrimSuffix(filepath.ToSlash(filepath.Clean(f)), "/")
-		if strings.HasSuffix(file, "/"+f) {
-			return true
-		}
-		for tail := f; tail != ""; {
-			if file == tail || strings.HasPrefix(file, tail+"/") {
-				return true
-			}
-			_, rest, ok := strings.Cut(tail, "/")
-			if !ok {
-				break
-			}
-			tail = rest
-		}
-	}
-	return false
 }
 
 // history loads what earlier runs taught: durations and the serial group.

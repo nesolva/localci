@@ -22,9 +22,9 @@ var version = "dev"
 const (
 	exitOK      = 0 // passed
 	exitFailed  = 1 // tests failed
-	exitUsage   = 2 // wrong usage or configuration
+	exitUsage   = 2 // wrong usage or configuration, a filter that matched no test included
 	exitInfra   = 3 // infrastructure: no server, a run that broke before its tests, a cancelled run
-	exitTimeout = 4 // gave up waiting
+	exitTimeout = 4 // a run passed its suite's timeout, or `wait` gave up
 )
 
 type command struct {

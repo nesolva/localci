@@ -171,5 +171,8 @@ CREATE TABLE workers (
 	revoked   INTEGER NOT NULL DEFAULT 0,
 	last_seen INTEGER NOT NULL DEFAULT 0
 );
+`, `
+-- Migration 9: why a failed run failed, when the CLI's exit code depends on it (see Run.Outcome).
+ALTER TABLE runs ADD COLUMN outcome TEXT NOT NULL DEFAULT '';
 `,
 }

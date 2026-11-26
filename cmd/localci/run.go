@@ -20,7 +20,7 @@ func init() {
 			fs.String("suite", "", "suite to run (default: the only one configured)")
 			fs.Bool("checks", false, "run the pull request checks of this checkout instead of a suite")
 			fs.String("grep", "", "only tests whose file and title match this regular expression")
-			fs.String("failed", "", "only the tests that failed in this run")
+			fs.String("failed", "", "only the tests that failed in this run (one of the same suite)")
 			fs.Bool("affected", false, "only the tests the diff can affect (all of them when that is not safe)")
 			fs.String("base", "", "with --affected: the branch the diff starts from (default: the default branch)")
 			fs.Bool("explain", false, "with --affected: choose the tests, run none, and say why each one (or why all)")

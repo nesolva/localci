@@ -280,7 +280,7 @@ func (r *Runner) stopJob(j *job, cause stopCause) {
 // stored, so a Wait in between does not read it as still queued.
 func (r *Runner) endQueued(j *job, cause stopCause) {
 	j.cancel(cause)
-	r.finishRun(j.id, store.StateCancelled, string(cause))
+	r.finishRun(j.id, store.StateCancelled, string(cause), "")
 	r.mu.Lock()
 	delete(r.jobs, j.id)
 	r.mu.Unlock()
@@ -342,10 +342,10 @@ func (r *Runner) Close() {
 	r.wg.Wait()
 }
 
-// finishRun records a terminal state and tells the log.
-func (r *Runner) finishRun(id, state, reason string) {
+// finishRun records a terminal state and tells the log. outcome is the run's outcome code, usually "".
+func (r *Runner) finishRun(id, state, reason, outcome string) {
 	ctx := context.Background()
-	if err := r.d.Store.SetRunState(ctx, id, state, reason); err != nil {
+	if err := r.d.Store.SetRunOutcome(ctx, id, state, reason, outcome); err != nil {
 		return
 	}
 	r.appendEvent(store.Event{Run: id, Kind: "run.state", Data: stateData(state, reason)})

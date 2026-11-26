@@ -22,7 +22,10 @@ type Run struct {
 	Reason string `json:"reason,omitempty"`
 	// Infra is why the stack or the tenant flow broke (one printable line); set, the run is an infrastructure
 	// failure: its status is error, `wait` exits 3 and its interrupted tests are not counted as failed.
-	Infra    string `json:"infra,omitempty"`
+	Infra string `json:"infra,omitempty"`
+	// Outcome says why a failed run failed when the exit code depends on it: `timeout` (the suite's timeout stopped
+	// it, `wait` exits 4) or `no_tests_matched` (an explicit filter selected no test, exit 2).
+	Outcome  string `json:"outcome,omitempty"`
 	Trigger  string `json:"trigger,omitempty"`
 	Heads    []Head `json:"heads,omitempty"`
 	Created  int64  `json:"created"`

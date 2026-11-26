@@ -109,5 +109,5 @@ func (r *Runner) executeExplore(ex *execution) {
 	case err != nil:
 		state, reason = store.StateFailed, trim(report.Reason(err.Error()), 600)
 	}
-	r.finishRun(ex.id, state, strings.TrimSpace(reason))
+	r.finishRun(ex.id, state, strings.TrimSpace(reason), "")
 }

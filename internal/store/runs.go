@@ -11,7 +11,7 @@ import (
 // ErrNotFound is returned when a run does not exist.
 var ErrNotFound = errors.New("store: not found")
 
-const runCols = `id, suite, kind, heads, "trigger", requested_by, state, reason, created, started, finished, fork, affected, infra`
+const runCols = `id, suite, kind, heads, "trigger", requested_by, state, reason, created, started, finished, fork, affected, infra, outcome`
 
 type scanner interface{ Scan(...any) error }
 
@@ -19,7 +19,7 @@ func scanRun(sc scanner) (Run, error) {
 	var r Run
 	var heads sql.NullString
 	err := sc.Scan(&r.ID, &r.Suite, &r.Kind, &heads, &r.Trigger, &r.RequestedBy, &r.State, &r.Reason,
-		&r.Created, &r.Started, &r.Finished, &r.Fork, &r.Affected, &r.Infra)
+		&r.Created, &r.Started, &r.Finished, &r.Fork, &r.Affected, &r.Infra, &r.Outcome)
 	if heads.Valid {
 		r.Heads = []byte(heads.String)
 	}
@@ -32,13 +32,13 @@ func (s *Store) PutRun(ctx context.Context, r Run) error {
 		r.Created = nowMS()
 	}
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO runs(`+runCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		_, err := tx.ExecContext(ctx, `INSERT INTO runs(`+runCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 			ON CONFLICT(id) DO UPDATE SET suite=excluded.suite, kind=excluded.kind, heads=excluded.heads,
 			"trigger"=excluded."trigger", requested_by=excluded.requested_by, state=excluded.state,
 			reason=excluded.reason, created=excluded.created, started=excluded.started, finished=excluded.finished,
-			fork=excluded.fork, affected=excluded.affected, infra=excluded.infra`,
+			fork=excluded.fork, affected=excluded.affected, infra=excluded.infra, outcome=excluded.outcome`,
 			r.ID, r.Suite, r.Kind, nullJSON(r.Heads), r.Trigger, r.RequestedBy, r.State, r.Reason,
-			r.Created, r.Started, r.Finished, r.Fork, r.Affected, r.Infra)
+			r.Created, r.Started, r.Finished, r.Fork, r.Affected, r.Infra, r.Outcome)
 		return err
 	})
 	if err != nil {
@@ -50,11 +50,17 @@ func (s *Store) PutRun(ctx context.Context, r Run) error {
 // SetRunState moves a run to state. started/finished are stamped with now the first time the run reaches
 // running / a terminal state.
 func (s *Store) SetRunState(ctx context.Context, id, state, reason string) error {
+	return s.SetRunOutcome(ctx, id, state, reason, "")
+}
+
+// SetRunOutcome is SetRunState with the run's outcome code (see Run.Outcome). One update writes both, so whoever
+// sees the final state sees the code too.
+func (s *Store) SetRunOutcome(ctx context.Context, id, state, reason, outcome string) error {
 	now := nowMS()
-	res, err := s.w.ExecContext(ctx, `UPDATE runs SET state=?, reason=?,
+	res, err := s.w.ExecContext(ctx, `UPDATE runs SET state=?, reason=?, outcome=?,
 		started = CASE WHEN ?=? AND started=0 THEN ? ELSE started END,
 		finished = CASE WHEN ? AND finished=0 THEN ? ELSE finished END WHERE id=?`,
-		state, reason, state, StateRunning, now, Terminal(state), now, id)
+		state, reason, outcome, state, StateRunning, now, Terminal(state), now, id)
 	if err != nil {
 		return err
 	}

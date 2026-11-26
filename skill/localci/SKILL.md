@@ -17,6 +17,10 @@ The loop is **run, wait, show, triage, fix, run --failed**.
    Without `--wait` it prints one line with the run id and returns at once; then `localci wait <id>` blocks until it ends.
 2. The last line says how it ended: `#42 failed 2/128 · 5m12s · localci show 42`. Exit code: 0 passed, 1 tests failed,
    2 wrong usage or configuration, 3 infrastructure (server down, run broke before its tests, cancelled, or its stack or tenant flow broke: `infrastructure: <reason>`, not failed tests), 4 timeout.
+   Exit 2 also means nothing you asked for ran: files, a directory or `--grep` that match no test (`no tests matched
+   <filter>`: check the path or the pattern, it is not a pass), or a `--failed` id that is another suite's or has no
+   failed tests. Exit 4 is the suite's own timeout (`timed out after <d>`: something hangs or is too slow, read
+   `localci show` or `localci logs`) or `wait` giving up while the run goes on (`still not finished`: wait again).
 3. `localci show 42` prints the first failure: test title and `file:line`, the failing step, expected vs actual, an
    accessibility-tree excerpt of the target, console errors, failed network calls and the paths of the screenshot and
    trace. `localci show 42 --all` prints every failure; `--full` lifts the 25-line limit per failure.
