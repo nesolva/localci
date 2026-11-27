@@ -119,14 +119,26 @@ func looseEqual(l, r val) bool {
 
 // typedVal reads a YAML matrix scalar with its YAML type.
 func typedVal(n *yaml.Node) val {
+	return typedValIn(n, map[*yaml.Node]bool{})
+}
+
+// typedValIn tracks the mappings on the current path: an alias that points back
+// into one of them (`&x {a: *x}`) reads as null instead of recursing forever. A
+// reused anchor that is not its own ancestor still resolves.
+func typedValIn(n *yaml.Node, path map[*yaml.Node]bool) val {
 	if n != nil && n.Kind == yaml.AliasNode {
 		n = n.Alias
 	}
 	if n != nil && n.Kind == yaml.MappingNode {
+		if path[n] {
+			return nullVal()
+		}
+		path[n] = true
+		defer delete(path, n)
 		keys, vals := mapPairs(n)
 		obj := make(map[string]val, len(keys))
 		for _, k := range keys {
-			obj[k] = typedVal(vals[k])
+			obj[k] = typedValIn(vals[k], path)
 		}
 		return val{kind: kindObject, s: scalar(n), obj: obj}
 	}
