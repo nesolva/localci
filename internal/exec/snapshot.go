@@ -42,7 +42,7 @@ func (m *Mirror) Snapshot(ctx context.Context, dir string) (Snapshot, error) {
 	}
 	mu := lockFor(m.Dir)
 	mu.Lock()
-	_, err = git(ctx, m.Dir, "fetch", "--quiet", "--no-tags",
+	_, err = mu.git(ctx, m.Dir, "fetch", "--quiet", "--no-tags",
 		"--upload-pack", "git -c uploadpack.allowAnySHA1InWant=true upload-pack",
 		"--", src, "+"+sha+":"+ref)
 	mu.Unlock()

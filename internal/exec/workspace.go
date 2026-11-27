@@ -28,7 +28,7 @@ func (w *Workspace) Checkout(ctx context.Context, m *Mirror, sha string, keep []
 	mu := lockFor(w.Dir)
 	mu.Lock()
 	defer mu.Unlock()
-	if err := w.init(ctx, m); err != nil {
+	if err := w.init(ctx, mu, m); err != nil {
 		return err
 	}
 	// git before 2.45 has no --end-of-options for checkout (a worker machine may have an older git), so a value
@@ -36,14 +36,14 @@ func (w *Workspace) Checkout(ctx context.Context, m *Mirror, sha string, keep []
 	if strings.HasPrefix(sha, "-") {
 		return fmt.Errorf("checkout: %q is not a commit", sha)
 	}
-	if _, err := git(ctx, w.Dir, "checkout", "--quiet", "--detach", "--force", sha); err != nil {
+	if _, err := mu.git(ctx, w.Dir, "checkout", "--quiet", "--detach", "--force", sha); err != nil {
 		return err
 	}
 	args := []string{"clean", "-ffdx", "--quiet"}
 	for _, k := range keep {
 		args = append(args, "-e", k)
 	}
-	_, err := git(ctx, w.Dir, args...)
+	_, err := mu.git(ctx, w.Dir, args...)
 	return err
 }
 
@@ -51,7 +51,7 @@ func (w *Workspace) Checkout(ctx context.Context, m *Mirror, sha string, keep []
 // runs every time: a git killed here (a superseded or cancelled run) can leave a
 // .git that is not a repository yet, or one without its settings, so a .git that
 // exists proves nothing. `git init` completes it and is safe on a complete one.
-func (w *Workspace) init(ctx context.Context, m *Mirror) error {
+func (w *Workspace) init(ctx context.Context, mu *pathLock, m *Mirror) error {
 	if err := os.MkdirAll(w.Dir, 0o755); err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (w *Workspace) init(ctx context.Context, m *Mirror) error {
 		{"config", "gc.auto", "0"},
 		{"config", "maintenance.auto", "false"},
 	} {
-		if _, err := git(ctx, w.Dir, args...); err != nil {
+		if _, err := mu.git(ctx, w.Dir, args...); err != nil {
 			return err
 		}
 	}
