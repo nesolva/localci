@@ -119,28 +119,35 @@ func looseEqual(l, r val) bool {
 
 // typedVal reads a YAML matrix scalar with its YAML type.
 func typedVal(n *yaml.Node) val {
-	return typedValIn(n, map[*yaml.Node]bool{})
+	return typedValIn(n, map[*yaml.Node]*val{})
 }
 
-// typedValIn tracks the mappings on the current path: an alias that points back
-// into one of them (`&x {a: *x}`) reads as null instead of recursing forever. A
-// reused anchor that is not its own ancestor still resolves.
-func typedValIn(n *yaml.Node, path map[*yaml.Node]bool) val {
+// typedValIn reads each mapping once, so aliases cannot make it expand: seen
+// holds the mappings read so far, and nil for those still being read. An alias
+// back into one of those (`&x {a: *x}`) reads as null instead of recursing for
+// ever; a reused anchor (`&a1 {l: *a0, r: *a0}`, level after level) shares the
+// object read the first time instead of reading it 2^n times. The objects are
+// only read afterwards, so sharing them is safe.
+func typedValIn(n *yaml.Node, seen map[*yaml.Node]*val) val {
 	if n != nil && n.Kind == yaml.AliasNode {
 		n = n.Alias
 	}
 	if n != nil && n.Kind == yaml.MappingNode {
-		if path[n] {
-			return nullVal()
+		if v, ok := seen[n]; ok {
+			if v == nil {
+				return nullVal()
+			}
+			return *v
 		}
-		path[n] = true
-		defer delete(path, n)
+		seen[n] = nil
 		keys, vals := mapPairs(n)
 		obj := make(map[string]val, len(keys))
 		for _, k := range keys {
-			obj[k] = typedValIn(vals[k], path)
+			obj[k] = typedValIn(vals[k], seen)
 		}
-		return val{kind: kindObject, s: scalar(n), obj: obj}
+		v := val{kind: kindObject, s: scalar(n), obj: obj}
+		seen[n] = &v
+		return v
 	}
 	if n == nil || n.Kind != yaml.ScalarNode {
 		return strVal(scalar(n))

@@ -1,8 +1,10 @@
 package workflow
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 const objectMatrix = `on: pull_request
@@ -134,5 +136,29 @@ jobs:
 	}
 	if got := strings.Join(reuse, "|"); !strings.Contains(got, "echo one") {
 		t.Errorf("reuse steps = %q, want the aliased object's name (echo one)", got)
+	}
+}
+
+// Anchors that each alias the previous one twice (`&a1 {l: *a0, r: *a0}`, ...) describe 2^n leaves in n lines. The
+// planner must read each anchored object once, or 40 levels keep serve busy for ever.
+func TestMatrixAliasBomb(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("on: pull_request\njobs:\n  bomb:\n    runs-on: x\n    strategy:\n      matrix:\n        cfg:\n          - &a0 {p: 1}\n")
+	for i := 1; i <= 40; i++ {
+		fmt.Fprintf(&b, "          - &a%d {l: *a%d, r: *a%d}\n", i, i-1, i-1)
+	}
+	b.WriteString("    steps:\n      - run: echo ${{ matrix.cfg.l.l.p }}\n")
+	done := make(chan Result, 1)
+	go func() {
+		done <- PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: "a/b", Branch: "main"},
+			map[string][]byte{".github/workflows/ci.yml": []byte(b.String())})
+	}()
+	select {
+	case res := <-done:
+		if len(res.Checks) == 0 {
+			t.Fatal("no check planned")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("still planning after 10s: the aliases are expanded instead of read once")
 	}
 }
