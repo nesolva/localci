@@ -6,7 +6,9 @@ import (
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -230,8 +232,10 @@ func TestWarmWorkspaceKeepsOnlyKeptPaths(t *testing.T) {
 	}
 }
 
-// A git killed mid-checkout leaves .git/index.lock behind, and every later checkout of that workspace dies on it.
-// The repository's own lock files go; a *.lock in the working tree is a tracked file of the project.
+// A git killed mid-checkout or mid-fetch leaves its lock files behind, and every later git of that repository dies on
+// them: .git/index.lock in a workspace, refs/heads/<branch>.lock (or refs/pull/N/head.lock) in a mirror. The
+// repository's own lock files go, nested ref locks included; a *.lock in the working tree is a tracked file of the
+// project.
 func TestCheckoutClearsLockFilesALeftByAKilledGit(t *testing.T) {
 	origin := newOrigin(t)
 	write(t, filepath.Join(origin, "yarn.lock"), "# lockfile\n")
@@ -248,17 +252,155 @@ func TestCheckoutClearsLockFilesALeftByAKilledGit(t *testing.T) {
 	}
 
 	old := time.Now().Add(-time.Hour) // for a host without lsof, which then goes by age
-	for _, name := range []string{"index.lock", "HEAD.lock"} {
-		lock := filepath.Join(ws.Dir, ".git", name)
+	leave := func(lock string) {
 		write(t, lock, "")
 		if err := os.Chtimes(lock, old, old); err != nil {
 			t.Fatal(err)
 		}
 	}
+	for _, name := range []string{"index.lock", "HEAD.lock", "refs/heads/main.lock"} {
+		leave(filepath.Join(ws.Dir, ".git", name))
+	}
 	if err := ws.Checkout(bg, m, head, nil); err != nil {
 		t.Fatalf("checkout after a killed git: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(ws.Dir, ".git", "refs", "heads", "main.lock")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a ref lock left by a killed git is still there (stat: %v)", err)
+	}
 	if _, err := os.Stat(filepath.Join(ws.Dir, "yarn.lock")); err != nil {
 		t.Fatalf("a tracked *.lock file of the project must survive: %v", err)
+	}
+
+	leave(filepath.Join(m.Dir, "refs", "heads", "main.lock"))
+	write(t, filepath.Join(origin, "app.txt"), "moved\n")
+	run(t, origin, "commit", "-q", "-am", "moved")
+	if err := m.Fetch(bg, "+refs/heads/*:refs/heads/*"); err != nil {
+		t.Fatalf("fetch after a killed fetch left refs/heads/main.lock: %v", err)
+	}
+}
+
+// A cancelled run's git must take its lock files with it. A host without lsof keeps a young lock for minutes, so one
+// left behind fails the run that superseded this one.
+func TestCancelledCheckoutLeavesNoLockFile(t *testing.T) {
+	origin := newOrigin(t)
+	write(t, filepath.Join(origin, ".gitattributes"), "app.txt filter=hold\n")
+	write(t, filepath.Join(origin, "app.txt"), "v1\n")
+	run(t, origin, "add", ".")
+	run(t, origin, "commit", "-q", "-m", "one")
+	first := run(t, origin, "rev-parse", "HEAD")
+	write(t, filepath.Join(origin, "app.txt"), "v2\n")
+	run(t, origin, "commit", "-q", "-am", "two")
+	second := run(t, origin, "rev-parse", "HEAD")
+	m := newMirror(t, origin)
+	if err := m.Fetch(bg, "+refs/heads/*:refs/heads/*"); err != nil {
+		t.Fatal(err)
+	}
+	ws := OpenWorkspace(t.TempDir(), "check", "acme/web")
+	if err := ws.Checkout(bg, m, first, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	noLsof(t)
+
+	// The filter holds the next checkout while git has the index locked. It
+	// lasts while its marker does, so removing the temp dir ends it.
+	tmp := t.TempDir()
+	held, pidFile := filepath.Join(tmp, "held"), filepath.Join(tmp, "pid")
+	run(t, ws.Dir, "config", "filter.hold.smudge",
+		"exec 2>/dev/null; echo $$ > '"+pidFile+"'; touch '"+held+"'; while [ -e '"+held+"' ]; do sleep 0.05; done; cat")
+	ctx, cancel := context.WithCancel(bg)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- ws.Checkout(ctx, m, second, nil) }()
+	for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if _, err := os.Stat(held); err == nil {
+			break
+		} else if time.Now().After(deadline) {
+			t.Fatal("the checkout never reached the filter")
+		}
+	}
+	lock := filepath.Join(ws.Dir, ".git", "index.lock")
+	if _, err := os.Stat(lock); err != nil {
+		t.Fatalf("the held checkout has no index lock: %v", err)
+	}
+	// What a git killed before it could clean up leaves: a young lock beside the index and one under refs/.
+	left := []string{filepath.Join(ws.Dir, ".git", "packed-refs.lock"), filepath.Join(ws.Dir, ".git", "refs", "heads", "x.lock")}
+	for _, f := range left {
+		write(t, f, "")
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled checkout = %v, want %v", err, context.Canceled)
+	}
+	for _, f := range append(left, lock) {
+		if _, err := os.Stat(f); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("the cancelled checkout left %s (stat: %v)", strings.TrimPrefix(f, ws.Dir), err)
+		}
+	}
+	b, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+	for deadline := time.Now().Add(5 * time.Second); processAlive(pid); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the cancelled git's filter (pid %d) is still running", pid)
+		}
+	}
+	run(t, ws.Dir, "config", "--unset", "filter.hold.smudge")
+	if err := ws.Checkout(bg, m, second, nil); err != nil {
+		t.Fatalf("the checkout after the cancelled one: %v", err)
+	}
+}
+
+// noLsof makes this test a host without lsof (and, on Linux, without /proc to stand in for it).
+func noLsof(t *testing.T) {
+	t.Helper()
+	lsof, proc := lsofCmd, procRoot
+	lsofCmd, procRoot = filepath.Join(t.TempDir(), "no-lsof"), filepath.Join(t.TempDir(), "no-proc")
+	t.Cleanup(func() { lsofCmd, procRoot = lsof, proc })
+}
+
+// processAlive reports whether pid runs (a zombie counts as gone).
+func processAlive(pid int) bool {
+	if pid <= 0 || syscall.Kill(pid, 0) != nil {
+		return false
+	}
+	out, err := osexec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	return err == nil && !strings.HasPrefix(strings.TrimSpace(string(out)), "Z")
+}
+
+// A git killed during the workspace's first `git init` (a run superseded right after it started) leaves a .git that
+// is not a repository yet. The next run must complete it, or every later checkout of that workspace fails.
+func TestCheckoutCompletesAHalfMadeRepository(t *testing.T) {
+	origin := newOrigin(t)
+	write(t, filepath.Join(origin, "app.txt"), "v1\n")
+	run(t, origin, "add", ".")
+	run(t, origin, "commit", "-q", "-m", "one")
+	head := run(t, origin, "rev-parse", "HEAD")
+	m := newMirror(t, origin)
+	if err := m.Fetch(bg, "+refs/heads/*:refs/heads/*"); err != nil {
+		t.Fatal(err)
+	}
+	// What a killed `git init` has been seen to leave: some directories, no HEAD.
+	for name, left := range map[string][]string{
+		"only objects":         {"objects"},
+		"templates, no HEAD":   {"hooks", "info", "objects"},
+		"an empty .git folder": {""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ws := OpenWorkspace(t.TempDir(), "check", "acme/web")
+			for _, d := range left {
+				if err := os.MkdirAll(filepath.Join(ws.Dir, ".git", d), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := ws.Checkout(bg, m, head, nil); err != nil {
+				t.Fatalf("checkout after a killed git init: %v", err)
+			}
+			if b, _ := os.ReadFile(filepath.Join(ws.Dir, "app.txt")); string(b) != "v1\n" {
+				t.Fatalf("app.txt = %q, want the commit's", b)
+			}
+		})
 	}
 }

@@ -1,8 +1,8 @@
 // Package checks runs the pull request checks of a repo's `.github/workflows`
 // on this machine: each planned job becomes a run of kind `check`, its steps
 // run in order in a workspace at the pull request's merge result, and each
-// check reports its own commit status. A tree already proven green by the same
-// check is not run again.
+// check reports its own commit status, and `localci/checks` sums them up. A tree
+// already proven green by the same check is not run again.
 package checks
 
 import (
@@ -102,8 +102,12 @@ type Runner struct {
 	wg      sync.WaitGroup
 	mu      sync.Mutex
 	active  map[string]*job // by run id, and by repo, PR and check
-	ctxOnce sync.Once
-	baseCtx context.Context
+	batch   map[*job]string // the Submit that created each active job
+	// summaries has a *headSummary per repo and head commit; newest maps a pull
+	// request to the last head Submit planned for it.
+	summaries, newest sync.Map
+	ctxOnce           sync.Once
+	baseCtx           context.Context
 }
 
 // Request asks for the checks of one tree.
@@ -125,6 +129,11 @@ type Request struct {
 	// merge ref is still not ready, Submit posts an error status on the head
 	// instead of leaving the pull request without checks in silence.
 	LastAttempt bool
+	// Only, when set, starts just the check with this status context
+	// (`localci/<workflow>/<name>`). Every check is still planned and named
+	// first, so a suffixed name is found. A request for a context no check
+	// has starts nothing.
+	Only string
 }
 
 // Started is one check Submit began.
@@ -146,14 +155,11 @@ type Submission struct {
 
 var errSuperseded = errors.New("superseded")
 
-// mergeRefSuite is the status context (`localci/checks`) that says whether
-// GitHub's merge ref was ready for a head. No suite may take this name.
-const mergeRefSuite = "checks"
-
 // Submit plans the checks of the tree in req and starts them in the
-// background; it returns once they are queued. A pull request that does not
-// merge into its base has no merge result to test: that is a
-// *exec.MergeConflictError and nothing starts.
+// background; it returns once they are queued. For a pull request it also posts
+// `localci/checks`: pending when checks start, success when none applies. A pull
+// request that does not merge into its base has no merge result to test: that is
+// a *exec.MergeConflictError and nothing starts.
 func (r *Runner) Submit(ctx context.Context, req Request) (Submission, error) {
 	if req.Repo == "" || (req.Head == "" && req.Snapshot == "") {
 		return Submission{}, errors.New("checks: a request needs a repo and a head or a snapshot")
@@ -168,19 +174,12 @@ func (r *Runner) Submit(ctx context.Context, req Request) (Submission, error) {
 		if req.LastAttempt && r.Forge != nil && errors.As(err, &pe) && pe.MergeRef() {
 			// Nothing was planned, so there is no check context to report on:
 			// one status on the head says why its checks did not run.
-			st := forge.Status{Suite: mergeRefSuite, State: forge.StateError, Description: "GitHub merge ref not ready"}
+			st := forge.Status{Suite: summarySuite, State: forge.StateError, Description: "GitHub merge ref not ready"}
 			if perr := r.Forge.SetStatus(ctx, req.Repo, req.Head, st); perr != nil {
 				err = errors.Join(err, perr)
 			}
 		}
 		return Submission{}, err
-	}
-	if req.PR > 0 && r.Options.MergeRef && r.Forge != nil {
-		// Clears a "merge ref not ready" error an earlier attempt may have left
-		// on this head (one status per submit; no memory to lose on restart).
-		// Best effort: a missing status must not keep the checks from running.
-		st := forge.Status{Suite: mergeRefSuite, State: forge.StateSuccess, Description: "merge ref ready"}
-		_ = r.Forge.SetStatus(ctx, req.Repo, req.Head, st)
 	}
 	ev := workflow.Event{Name: "pull_request", Repo: req.Repo, Branch: req.Base}
 	if r.Options.PathFilters && req.Base != "" {
@@ -199,21 +198,93 @@ func (r *Runner) Submit(ctx context.Context, req Request) (Submission, error) {
 	}
 
 	sub := Submission{Skipped: plan.Skipped}
+	var runnable []workflow.Check
 	for _, c := range plan.Checks {
 		if c.NeedsActions && r.Act == nil {
 			sub.Skipped = append(sub.Skipped, workflow.Skip{Workflow: c.Workflow, Job: c.Name,
 				Reason: "needs third-party actions and `act` is not set up"})
 			continue
 		}
+		runnable = append(runnable, c)
+	}
+	// Every name is final before the first status is created: two checks that
+	// shared a context would overwrite each other's status on the commit.
+	runnable = uniqueNames(runnable)
+	var planned, starting []string
+	var selected []workflow.Check
+	for _, c := range runnable {
+		planned = append(planned, checkName(c))
+		if req.Only == "" || forge.Context(checkName(c)) == req.Only {
+			starting = append(starting, checkName(c))
+			selected = append(selected, c)
+		}
+	}
+	var summary *headSummary
+	if req.PR > 0 && r.Forge != nil {
+		summary = r.headSummary(req.Repo, req.Head)
+		summary.mu.Lock()
+		defer summary.mu.Unlock()
+		summary.planned = planned
+		// Set before a check of this head supersedes one of an older head: from
+		// here on that one gets no summary.
+		r.newest.Store(pullKey(req), req.Head)
+		// Posted before any check starts, so a result can only come after it.
+		// With nothing planned this is the only one, and it must be posted: a
+		// required status that never arrives blocks the pull request for ever.
+		if len(starting) > 0 || len(planned) == 0 {
+			r.postSummary(req, planned, starting)
+		}
+	}
+	batch := newID()
+	for _, c := range selected {
 		j := &job{r: r, req: req, check: c, mirror: m, sha: sha, tree: tree, id: newID(), done: make(chan struct{})}
-		j.name = workflowLabel(c.Workflow) + "/" + c.Name
+		j.name = checkName(c)
 		if err := j.create(ctx); err != nil {
+			if summary != nil {
+				// The rest will not start: the pending one above must not wait for them.
+				r.postSummary(req, planned, nil)
+			}
 			return sub, err
 		}
 		sub.Runs = append(sub.Runs, Started{RunID: j.id, Workflow: c.Workflow, Name: c.Name, Context: forge.Context(j.name), Done: j.done})
-		r.start(j)
+		r.start(j, batch)
 	}
 	return sub, nil
+}
+
+// checkName is `<workflow>/<job>`, the check's status context without its
+// prefix.
+func checkName(c workflow.Check) string { return workflowLabel(c.Workflow) + "/" + c.Name }
+
+// uniqueNames gives every check of cs its own status context
+// (`localci/<workflow>/<name>`, across workflows). A check whose context is
+// shared with another gets GitHub's cell suffix (`test linux (linux, 18)`);
+// names that are unique keep their name, so contexts of existing setups do not
+// change. Cells that still collide are numbered: `(linux, 18 #2)`.
+func uniqueNames(cs []workflow.Check) []workflow.Check {
+	count := map[string]int{}
+	for _, c := range cs {
+		count[checkName(c)]++
+	}
+	out := slices.Clone(cs)
+	for i, c := range out {
+		if count[checkName(c)] > 1 {
+			out[i].Name += c.Cell
+		}
+	}
+	seen := map[string]int{}
+	for i, c := range out {
+		k := checkName(c)
+		seen[k]++
+		if n := seen[k]; n > 1 {
+			if base, ok := strings.CutSuffix(c.Name, ")"); ok {
+				out[i].Name = fmt.Sprintf("%s #%d)", base, n)
+			} else {
+				out[i].Name = fmt.Sprintf("%s (#%d)", c.Name, n)
+			}
+		}
+	}
+	return out
 }
 
 // plan is workflow.PlanDetailed without the workflow files the repo skips
@@ -266,7 +337,8 @@ func (r *Runner) Snapshot(ctx context.Context, repo, dir string) (exec.Snapshot,
 	return m.Snapshot(ctx, dir)
 }
 
-// Wait blocks until every run Submit started is done.
+// Wait blocks until every run Submit started is done and its statuses, the
+// summary included, are posted.
 func (r *Runner) Wait() { r.wg.Wait() }
 
 // Cancel stops the running or queued run id.
@@ -380,7 +452,7 @@ func short(sha string) string {
 	return sha
 }
 
-func (r *Runner) start(j *job) {
+func (r *Runner) start(j *job, batch string) {
 	r.ctxOnce.Do(func() {
 		r.baseCtx = r.Context
 		if r.baseCtx == nil {
@@ -392,7 +464,9 @@ func (r *Runner) start(j *job) {
 	r.mu.Lock()
 	if r.active == nil {
 		r.active = map[string]*job{}
+		r.batch = map[*job]string{}
 	}
+	r.batch[j] = batch
 	if j.req.PR > 0 {
 		j.key = fmt.Sprintf("%s#%d %s", j.req.Repo, j.req.PR, j.name)
 		if prev := r.active[j.key]; prev != nil {
@@ -417,6 +491,7 @@ func (r *Runner) start(j *job) {
 			cancel(nil)
 		}()
 		j.run(ctx)
+		r.checkEnded(j)
 	}()
 }
 

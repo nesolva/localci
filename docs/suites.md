@@ -46,8 +46,18 @@ never polled). `localci doctor` lists each `path` and whether it is a git checko
 | `test` | `repo`, `run` (the command for one shard), `env`, and `list` (how to list tests: NDJSON `{test,file,title,line}`; default `npx --no-install --offline localci-playwright list`, for pytest `python -m localci_pytest list`). |
 | `shards` | A number, or `auto` (from the machine's capacity). Tests are split by measured duration; a suite with fewer tests than shards leaves some shards empty. |
 | `isolation` | `isolated` (default), `shared-db`, `tenant` or `auto`; see [isolation levels](isolation.md). |
-| `timeout` | Longest a run may take, such as `10m`. |
+| `timeout` | Longest a run may take, such as `10m`; 60 minutes when not set, `0` turns it off. Time spent queued behind other runs does not count. A run it stops ends failed with `timed out after <d>`, and `wait` exits 4. |
 | `exclusive` | `true` stops other work while the suite runs. |
+
+## The environment of a run
+
+A run gets the server's environment: that of the `localci serve` process (the service's, when it was installed with
+`localci service install`), not the environment of the shell that ran `localci run`. A service starts with what its
+manager gives it, which is not your interactive shell's. The result is the same whether you start a run from the CLI,
+from a pull request or from the dashboard, and a variable you `export` before `localci run` does not reach the tests.
+
+To give the tests a value, put it in the suite's `env:` under `test` (as in the example above); a `stack` entry has its
+own `env` for the processes it starts. Run options will be another way once they ship.
 
 ## Templates
 

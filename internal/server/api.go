@@ -50,7 +50,8 @@ func (s *Server) lastSeq(ctx context.Context) int64 {
 
 // summarize turns a stored run into what the API returns.
 func (s *Server) summarize(ctx context.Context, r store.Run) Run {
-	out := Run{ID: r.ID, Suite: r.Suite, Kind: r.Kind, State: r.State, Reason: r.Reason, Infra: r.Infra, Trigger: r.Trigger,
+	out := Run{ID: r.ID, Suite: r.Suite, Kind: r.Kind, State: r.State, Reason: r.Reason, Infra: r.Infra, Outcome: r.Outcome,
+		Trigger: r.Trigger,
 		Created: r.Created, Started: r.Started, Finished: r.Finished, Affected: r.Affected}
 	if len(r.Heads) > 0 {
 		json.Unmarshal(r.Heads, &out.Heads)

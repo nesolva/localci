@@ -19,12 +19,22 @@ func dockerImage(t *testing.T) string {
 		img = "alpine:3"
 	}
 	if !exec.DockerAvailable() {
-		t.Skip("Docker is not running")
+		skipDocker(t, "Docker is not running")
 	}
 	if osexec.Command("docker", "image", "inspect", img).Run() != nil {
-		t.Skipf("image %s is not present locally (set LOCALCI_TEST_IMAGE to one that is)", img)
+		skipDocker(t, "image %s is not present locally (set LOCALCI_TEST_IMAGE to one that is)", img)
 	}
 	return img
+}
+
+// skipDocker skips a test that needs Docker or an image this machine lacks. CI sets LOCALCI_TEST_DOCKER=require
+// after pulling the images, and there it fails instead, so a Docker test cannot pass in CI by not running.
+func skipDocker(t *testing.T, format string, args ...any) {
+	t.Helper()
+	if os.Getenv("LOCALCI_TEST_DOCKER") == "require" {
+		t.Fatalf("LOCALCI_TEST_DOCKER=require: "+format, args...)
+	}
+	t.Skipf(format, args...)
 }
 
 // docker lists what is left of a run: names of containers and networks.

@@ -127,20 +127,29 @@ func finishedLine(r server.Run, named bool) string {
 	if d := took(r); d > 0 {
 		parts = append(parts, fmtDur(d))
 	}
-	switch r.State {
-	case store.StateFailed:
+	switch {
+	case r.State == store.StateFailed && r.Infra != "":
+		parts = append(parts, infraText(r))
+	// A cancelled run's reason is in the head already.
+	case r.State != store.StateCancelled && r.Reason != "" && !repeatsCounts(r):
+		parts = append(parts, trim(r.Reason, 80))
+	}
+	if r.State == store.StateFailed {
 		switch {
-		case r.Infra != "":
-			parts = append(parts, infraText(r), "localci logs "+r.ID)
-		case r.Kind == store.KindSuite && r.Failed > 0:
+		case r.Kind == store.KindSuite && r.Failed > 0 && r.Infra == "":
 			parts = append(parts, "localci show "+r.ID)
-		case r.Reason != "":
-			parts = append(parts, trim(r.Reason, 80), "localci logs "+r.ID)
-		default:
+		// A filter that matched nothing started no test, so there is no log to read.
+		case r.Outcome != store.OutcomeNoTests:
 			parts = append(parts, "localci logs "+r.ID)
 		}
 	}
 	return strings.Join(parts, " · ")
+}
+
+// repeatsCounts says the reason only repeats the `2/128` at the head of the line.
+func repeatsCounts(r server.Run) bool {
+	return r.State == store.StateFailed && r.Kind == store.KindSuite && r.Failed > 0 &&
+		r.Reason == fmt.Sprintf("%d of %d tests failed", r.Failed, r.Tests)
 }
 
 // trim cuts s to n runes and keeps it on one line, printable.
@@ -168,6 +177,13 @@ func exitOf(r server.Run) int {
 		if r.Infra != "" {
 			return exitInfra
 		}
+		// Before the failed tests: the tests a timeout interrupted count as failed.
+		switch r.Outcome {
+		case store.OutcomeTimeout:
+			return exitTimeout
+		case store.OutcomeNoTests:
+			return exitUsage
+		}
 		if r.Kind == store.KindCheck || r.Failed > 0 {
 			return exitFailed
 		}
@@ -176,14 +192,12 @@ func exitOf(r server.Run) int {
 	return exitInfra
 }
 
-// worst picks the exit code that matters most when several runs ended differently.
+// worst picks the exit code that matters most when several runs ended differently. The codes are numbered in that
+// order: passed, tests failed, a command that ran nothing, infrastructure, timeout.
 func worst(codes ...int) int {
-	rank := map[int]int{exitOK: 0, exitFailed: 1, exitInfra: 2, exitTimeout: 3}
 	out := exitOK
 	for _, c := range codes {
-		if rank[c] > rank[out] {
-			out = c
-		}
+		out = max(out, c)
 	}
 	return out
 }

@@ -141,13 +141,14 @@ func TestDockerDownIsAnInfrastructureErrorNotAFailedCheck(t *testing.T) {
 	fx.runner.Act = RunAct
 	head := fx.pull("11", map[string]string{"feature.txt": "x\n"})
 
-	id := fx.submit(fx.request(11, head)).Runs[0].RunID
-	r := fx.run(id)
+	started := fx.submit(fx.request(11, head)).Runs[0]
+	r := fx.run(started.RunID)
 	if r.State != store.StateFailed || !strings.HasPrefix(r.Reason, "infrastructure:") || !strings.Contains(r.Reason, "Docker is not running") {
 		t.Errorf("run = %s %q", r.State, r.Reason)
 	}
-	if last := fx.forge.statuses[len(fx.forge.statuses)-1]; last.State != forge.StateError {
-		t.Errorf("status = %+v, want an error status", last.Status)
+	posts := fx.forge.of(strings.TrimPrefix(started.Context, "localci/"))
+	if len(posts) == 0 || posts[len(posts)-1].State != forge.StateError {
+		t.Errorf("statuses = %+v, want the last one an error", posts)
 	}
 }
 

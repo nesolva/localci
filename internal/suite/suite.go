@@ -25,7 +25,7 @@ type Suite struct {
 	Test      Test
 	Shards    int // 0 = auto
 	Isolation string
-	Timeout   time.Duration // 0 = none
+	Timeout   time.Duration // longest a run may take while it holds capacity; 0 = none
 	Exclusive bool
 
 	// Raw is the suite's whole mapping node, so packages of later phases read their own keys from it without
@@ -96,6 +96,9 @@ type Test struct {
 	Env  map[string]string
 }
 
+// DefaultTimeout is the timeout of a suite that sets none, so a command that hangs cannot hold the queue for ever.
+const DefaultTimeout = 60 * time.Minute
+
 // DefaultList is how tests are listed when the suite does not say.
 const DefaultList = "npx --no-install --offline localci-playwright list"
 
@@ -143,10 +146,10 @@ type rawSuite struct {
 		List string            `yaml:"list"`
 		Env  map[string]string `yaml:"env"`
 	} `yaml:"test"`
-	Shards    any           `yaml:"shards"`
-	Isolation string        `yaml:"isolation"`
-	Timeout   time.Duration `yaml:"timeout"`
-	Exclusive bool          `yaml:"exclusive"`
+	Shards    any    `yaml:"shards"`
+	Isolation string `yaml:"isolation"`
+	Timeout   any    `yaml:"timeout"` // untyped: absent (the default) differs from 0 (off)
+	Exclusive bool   `yaml:"exclusive"`
 }
 
 // Parse reads one suite from its mapping node. Keys this package does not know are left alone (see Suite.Raw).
@@ -169,7 +172,7 @@ func Parse(name string, n *yaml.Node) (*Suite, error) {
 	if err := n.Decode(&r); err != nil {
 		return fail("%v", err)
 	}
-	s := &Suite{Name: name, Repos: r.Repos, Isolation: r.Isolation, Timeout: r.Timeout, Exclusive: r.Exclusive, Raw: n}
+	s := &Suite{Name: name, Repos: r.Repos, Isolation: r.Isolation, Exclusive: r.Exclusive, Raw: n}
 	s.Trigger = Trigger{Push: r.Trigger.Push, Label: r.Trigger.Label}
 	if len(s.Repos) == 0 {
 		return fail("repos: list at least one repository")
@@ -192,6 +195,10 @@ func Parse(name string, n *yaml.Node) (*Suite, error) {
 		s.Isolation = r.Isolation
 	default:
 		return fail("isolation: %q is not known (use isolated, shared-db, tenant or auto)", r.Isolation)
+	}
+	var err error
+	if s.Timeout, err = parseTimeout(r.Timeout); err != nil {
+		return fail("%v", err)
 	}
 	switch v := r.Shards.(type) {
 	case nil:
@@ -322,6 +329,23 @@ func Parse(name string, n *yaml.Node) (*Suite, error) {
 		return fail("%v", err)
 	}
 	return s, nil
+}
+
+// parseTimeout reads `timeout:` as decoded from YAML: a duration, or 0 to turn it off.
+func parseTimeout(v any) (time.Duration, error) {
+	switch v := v.(type) {
+	case nil:
+		return DefaultTimeout, nil
+	case int:
+		if v == 0 {
+			return 0, nil
+		}
+	case string:
+		if d, err := time.ParseDuration(v); err == nil {
+			return d, nil
+		}
+	}
+	return 0, fmt.Errorf("timeout: %v is not a duration (use one such as 10m, or 0 to turn it off)", v)
 }
 
 // FromConfig parses every entry of config's `suites` mapping, in name order.

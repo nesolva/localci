@@ -25,7 +25,21 @@ localci run --failed 42 --wait      # only the tests that failed in run 42
 ```
 
 Exit codes: 0 passed, 1 tests failed, 2 wrong usage or configuration, 3 infrastructure (the server is down, or the
-run broke before its tests did), 4 timeout.
+run broke before its tests did), 4 timeout. When `wait` follows several runs, it exits with the highest of their codes.
+
+A run that ran nothing you asked for never exits 0:
+
+- Files, directories or `--grep` that select no test end the run failed with `no tests matched <filter>`, exit 2. So
+  does `--failed` when none of those tests is listed any more (renamed or removed). A directory selects every spec
+  under it, the suite's test directory and the repository root included.
+- `--failed <id>` is refused with exit 2, and no run is created, when run `<id>` is a check or a run of another suite,
+  or has no failed tests.
+- A run stopped by its [suite's `timeout`](suites.md) ends failed with `timed out after <d>`, exit 4. `wait --timeout`
+  giving up exits 4 too; the run goes on.
+- `--affected` that selects nothing passes, exit 0, and the line says `no tests affected`.
+
+The last line of a run ends with why it ended that way when there is more to say than the counts. A script reads the
+`outcome` field of `--json` (`timeout`, `no_tests_matched`), not the text of the reason.
 
 A failure report has what an agent needs to act without opening a trace: the failing step, expected and actual, an
 accessibility-tree excerpt around the target, the last console errors and failed requests, and the absolute paths of

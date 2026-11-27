@@ -53,7 +53,16 @@ type Run struct {
 	// not. A run with it is an infrastructure failure, not failed tests: its interrupted tests are not counted as
 	// failed and nothing is learned from it.
 	Infra string `json:"infra,omitempty"`
+	// Outcome says why a failed run failed when more than its tests decides what the caller should do about it:
+	// OutcomeTimeout or OutcomeNoTests, "" otherwise. It is what the CLI's exit code comes from, never the reason.
+	Outcome string `json:"outcome,omitempty"`
 }
+
+// The outcome codes of a run. They are part of the API: add new ones, never rename one.
+const (
+	OutcomeTimeout = "timeout"          // the suite's timeout stopped the run
+	OutcomeNoTests = "no_tests_matched" // an explicit filter selected no test
+)
 
 // Shard is one slice of a run. CostCPU is cores, CostMem bytes (measured, 0 until known).
 type Shard struct {

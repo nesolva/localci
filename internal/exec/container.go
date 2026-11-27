@@ -143,14 +143,18 @@ func RemoveNetwork(ctx context.Context, name string) error {
 
 // ContainerSpec describes a detached container.
 type ContainerSpec struct {
-	Name    string
-	Image   string
-	Network string
-	Aliases []string          // network aliases
-	Env     map[string]string // container environment
-	Volumes []string          // host:container[:mode]
-	Workdir string
-	Options string // extra `docker run` flags, as written in a workflow
+	Name  string
+	Image string
+	// Network is a Docker network name, or "container:<name>" to join that container's network namespace. Docker
+	// refuses AddHosts, and Aliases mean nothing, on a container that joins another's namespace: put them on the
+	// owner (the joiner shares the owner's hosts file).
+	Network  string
+	Aliases  []string          // network aliases
+	AddHosts []string          // host names that resolve to 127.0.0.1 in the container (--add-host name:127.0.0.1)
+	Env      map[string]string // container environment
+	Volumes  []string          // host:container[:mode]
+	Workdir  string
+	Options  string // extra `docker run` flags, as written in a workflow
 	// Run is the id of the run the container belongs to; it becomes the label localci.run=<id>, which the sweep
 	// at start uses to remove what a killed run left behind.
 	Run string
@@ -170,6 +174,9 @@ func StartContainer(ctx context.Context, spec ContainerSpec) error {
 	}
 	for _, a := range spec.Aliases {
 		args = append(args, "--network-alias", a)
+	}
+	for _, h := range spec.AddHosts {
+		args = append(args, "--add-host", h+":127.0.0.1")
 	}
 	for _, k := range sortedMapKeys(spec.Env) {
 		args = append(args, "-e", k+"="+spec.Env[k])
@@ -233,6 +240,25 @@ func WaitHealthy(ctx context.Context, name string, timeout time.Duration) error 
 	}
 }
 
+// Workflow steps get GitHub's shells: without `shell:` it is `bash -e` (no pipefail; `sh -e` where the image has no
+// bash), `shell: bash` adds --noprofile --norc and pipefail, `shell: sh` is `sh -e`.
+const (
+	bashDefaultFlags  = "-e"
+	bashExplicitFlags = "--noprofile --norc -eo pipefail"
+)
+
+// StepCommand is the command line that runs a workflow step's script with its shell on the host. shell is "bash",
+// "sh", or "" when the step names none.
+func StepCommand(shell, script string) string {
+	switch shell {
+	case "sh":
+		return "sh -e -c " + ShellQuote(script)
+	case "bash":
+		return "bash " + bashExplicitFlags + " -c " + ShellQuote(script)
+	}
+	return "bash " + bashDefaultFlags + " -c " + ShellQuote(script)
+}
+
 // ExecLine is the shell command line that runs script inside a job container.
 // shell is "bash", "sh", or "" for bash when the image has it and sh otherwise
 // (GitHub's default); env is the step's environment; workdir may be empty.
@@ -249,10 +275,12 @@ func ExecLine(container, workdir, shell string, env map[string]string, script st
 	case "sh":
 		args = append(args, "sh", "-e", "-c", script)
 	case "bash":
-		args = append(args, "bash", "-eo", "pipefail", "-c", script)
+		args = append(args, "bash")
+		args = append(args, strings.Fields(bashExplicitFlags)...)
+		args = append(args, "-c", script)
 	default:
 		args = append(args, "sh", "-c",
-			`if command -v bash >/dev/null 2>&1; then exec bash -eo pipefail -c "$1"; else exec sh -e -c "$1"; fi`, "sh", script)
+			`if command -v bash >/dev/null 2>&1; then exec bash `+bashDefaultFlags+` -c "$1"; else exec sh -e -c "$1"; fi`, "sh", script)
 	}
 	for i, a := range args {
 		if i > 0 {
