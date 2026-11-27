@@ -95,3 +95,44 @@ jobs:
 		t.Errorf("cells = %v, want Linux with no step and Mac with one", got)
 	}
 }
+
+// A matrix value whose YAML alias points back into itself must not crash the planner (it runs inside serve, so a
+// stack overflow there takes the daemon down on every PR head that carries it). A reused, non-cyclic anchor still
+// resolves to its object.
+func TestCyclicMatrixAlias(t *testing.T) {
+	const wf = `on: pull_request
+jobs:
+  loop:
+    runs-on: x
+    strategy:
+      matrix:
+        cfg: [&x {a: *x}]
+    steps:
+      - run: echo ${{ matrix.cfg.a }}
+  reuse:
+    runs-on: x
+    strategy:
+      matrix:
+        cfg: [&y {name: one}, {name: two, base: *y}]
+    steps:
+      - run: echo ${{ matrix.cfg.base.name }}
+`
+	res := PlanWorkflows("0123abc", Event{Name: "pull_request", Repo: "a/b", Branch: "main"},
+		map[string][]byte{".github/workflows/ci.yml": []byte(wf)})
+	var loop, reuse []string
+	for _, c := range res.Checks {
+		for _, s := range c.Steps {
+			if strings.HasPrefix(c.Job, "loop") {
+				loop = append(loop, s.Run)
+			} else if strings.HasPrefix(c.Job, "reuse") {
+				reuse = append(reuse, s.Run)
+			}
+		}
+	}
+	if len(loop) == 0 {
+		t.Errorf("the cyclic job planned no steps: %+v", res.Checks)
+	}
+	if got := strings.Join(reuse, "|"); !strings.Contains(got, "echo one") {
+		t.Errorf("reuse steps = %q, want the aliased object's name (echo one)", got)
+	}
+}
