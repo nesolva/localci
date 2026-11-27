@@ -66,7 +66,7 @@ func (m *Mirror) Fetch(ctx context.Context, refspecs ...string) error {
 	mu.Lock()
 	defer mu.Unlock()
 	args := append([]string{"-C", m.Dir, "fetch", "--quiet", "--no-tags", "--", "origin"}, refspecs...)
-	_, err := git(ctx, "", args...)
+	_, err := mu.git(ctx, "", args...)
 	return err
 }
 
@@ -99,7 +99,7 @@ func (m *Mirror) FetchPull(ctx context.Context, n int, base string) (PullRef, er
 			// Forget the merge commit of an earlier head, or it would be used.
 			mu := lockFor(m.Dir)
 			mu.Lock()
-			git(ctx, m.Dir, "update-ref", "-d", merge)
+			mu.git(ctx, m.Dir, "update-ref", "-d", merge)
 			mu.Unlock()
 			return PullRef{}, &MergeConflictError{Base: base}
 		}
