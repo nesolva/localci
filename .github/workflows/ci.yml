@@ -26,7 +26,13 @@ jobs:
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: "1.26"  # latest patch: govulncheck fails on a stdlib with known fixes
+      # The container and service tests skip without their images: pull them, and make a skip fail here.
+      - run: docker pull -q node:22-alpine && docker pull -q node:22
       - run: make ci-go
+        env:
+          LOCALCI_TEST_IMAGE: node:22-alpine
+          LOCALCI_TEST_BASH_IMAGE: node:22
+          LOCALCI_TEST_DOCKER: require
 
   playwright:
     runs-on: ubuntu-latest
