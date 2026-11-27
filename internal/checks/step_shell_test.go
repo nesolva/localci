@@ -19,13 +19,13 @@ func bashImage(t *testing.T) string {
 		img = "ubuntu:24.04"
 	}
 	if !exec.DockerAvailable() {
-		t.Skip("Docker is not running")
+		skipDocker(t, "Docker is not running")
 	}
 	if osexec.Command("docker", "image", "inspect", img).Run() != nil {
-		t.Skipf("image %s is not present locally (set LOCALCI_TEST_BASH_IMAGE to one that is)", img)
+		skipDocker(t, "image %s is not present locally (set LOCALCI_TEST_BASH_IMAGE to one that is)", img)
 	}
 	if osexec.Command("docker", "run", "--rm", "--entrypoint", "sh", img, "-c", "command -v bash").Run() != nil {
-		t.Skipf("image %s has no bash", img)
+		skipDocker(t, "image %s has no bash", img)
 	}
 	return img
 }
